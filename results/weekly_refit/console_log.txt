@@ -1,0 +1,57 @@
+Loading data...
+
+Weeks: 5212  (1926-11-06 to 2026-09-25)
+Training: 2606 weeks to 1976-10-15;  test: 2606 weeks
+
+Share of training weeks each factor topped: {'SMB': 0.265, 'HML': 0.305, 'MOM': 0.43}
+
+Baum-Welch: best log-likelihood -2761.80 over 20 starts; share of starts keeping the soft names: 0.90
+
+A (row = state this week, column = state next week)
+      SMB   HML   MOM
+SMB 0.732 0.018 0.250
+HML 0.193 0.807 0.000
+MOM 0.326 0.046 0.628
+
+B (row = hidden state, column = factor that topped)
+     SMB tops  HML tops  MOM tops
+SMB     0.485     0.339     0.176
+HML     0.000     0.560     0.440
+MOM     0.037     0.159     0.804
+
+Lift = B / overall share (state j keeps its name if row j peaks on column j, > 1)
+     SMB tops  HML tops  MOM tops
+SMB     1.831     1.110     0.410
+HML     0.000     1.834     1.023
+MOM     0.141     0.520     1.870
+Soft names supported by the data: True 
+
+Expected weeks a state lasts, 1/(1 - a_jj): {'SMB': 3.734, 'HML': 5.173, 'MOM': 2.688}
+Long-run share of weeks in each state (stationary distribution of A): {'SMB': 0.519, 'HML': 0.132, 'MOM': 0.349}
+
+Benchmark: raw MLE transition matrix of the observed top factor (training)
+      SMB   HML   MOM
+SMB 0.366 0.289 0.345
+HML 0.254 0.352 0.394
+MOM 0.211 0.283 0.506
+
+Viterbi path over the training window (uses hindsight):
+  weeks per state: {'SMB': 1289, 'HML': 427, 'MOM': 890}
+  average run length (weeks), Viterbi states: {'SMB': 5.51, 'HML': 12.2, 'MOM': 3.94}
+  average run length (weeks), observed top factor: {'SMB': 1.58, 'HML': 1.54, 'MOM': 2.03}
+
+Walk-forward test (refit every 1 week(s); forward-only probabilities)...
+                                        model  hit_rate  hit_rate_se  avg_log_score
+     HMM, most likely state (design doc rule)     0.334        0.009         -1.087
+HMM, most likely top factor (state probs x B)     0.401        0.010         -1.087
+ Raw MLE transition matrix (observable chain)     0.396        0.010         -1.090
+                            Same as last week     0.376        0.009            NaN
+                  Most frequent factor so far     0.401        0.010         -1.090
+HMM minus MLE chain, average log score: 0.0040 (standard error 0.0022)
+Refits: 2605 | refits where state names drifted: 0
+
+Forecast for the week after 2026-09-25 (full-sample refit):
+  P(state):      {'SMB': 0.42, 'HML': 0.196, 'MOM': 0.384}
+  P(top factor): {'SMB': 0.227, 'HML': 0.275, 'MOM': 0.498}
+
+Saved: /tmp/claude-0/-home-claude/9e9e036c-365e-597d-820e-4fa929f46ffc/scratchpad/run/ff_base/weekly_panel.csv, /tmp/claude-0/-home-claude/9e9e036c-365e-597d-820e-4fa929f46ffc/scratchpad/run/ff_base/walk_forward.csv, /tmp/claude-0/-home-claude/9e9e036c-365e-597d-820e-4fa929f46ffc/scratchpad/run/ff_base/walk_forward_summary.csv, /tmp/claude-0/-home-claude/9e9e036c-365e-597d-820e-4fa929f46ffc/scratchpad/run/ff_base/params.json
