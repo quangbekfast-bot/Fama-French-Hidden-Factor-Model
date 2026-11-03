@@ -66,7 +66,7 @@ Weekly run & French weekly 3-factor file plus daily momentum, compounded into Fr
 Monthly run & French monthly files; returns test added (Sections~\ref{sec:monthly}--\ref{sec:returns}). \\
 Diagnostics & Hit-rate comparison against the raw transition matrix; full-sample Viterbi encoding (Section~\ref{sec:viterbi}). \\
 Start check & Starting $A$ counted from data compared with the assumed $A^{(0)}$; the assumed start kept (Section~\ref{sec:initrobust}). \\
-TA feedback & Four validation extensions requested (cross-validation of the split, split-location sensitivity, randomised $A^{(0)}$, standard errors and a yearly block bootstrap). Specified in Section~\ref{sec:tafeedback}; \textbf{not yet implemented}. Cross-validation (Item~1) put on hold as covered by Items~2 and~4. \\
+TA feedback & Four validation extensions requested (cross-validation of the split, split-location sensitivity, randomised $A^{(0)}$, standard errors and a yearly block bootstrap). Specified in Section~\ref{sec:tafeedback}; \textbf{not yet implemented}. Cross-validation (Item~1) put on hold as covered by Items~2 and~4. Later added: HAC inference on the factor data (Item~5) and hierarchical cluster analysis of the factor data (Item~6). \\
 \bottomrule
 \end{longtable}
 
@@ -676,7 +676,7 @@ Period & State & Avg return (\%/month) & Episode \\
 %==========================================================================
 \section{Planned validation extensions (TA feedback, 3 November 2026)}\label{sec:tafeedback}
 
-\textbf{Status: to do} (Item~1 on hold). None of the items below has been implemented; no results in this log depend on them. Each item records what was asked, the exact procedure planned, and what it would report. Unless stated otherwise, the specification is monthly (main results), and every fit uses the existing training settings (20 restarts, $\pi$ fixed at $1/3$, tolerance $10^{-6}$, at most 500 iterations).
+\textbf{Status: to do} (Item~1 on hold; Items~5 and~6 added later). None of the items below has been implemented; no results in this log depend on them. Each item records what was asked, the exact procedure planned, and what it would report. Unless stated otherwise, the specification is monthly (main results), and every fit uses the existing training settings (20 restarts, $\pi$ fixed at $1/3$, tolerance $10^{-6}$, at most 500 iterations).
 
 \textbf{Common requirement: aligning state labels across fits.} Every item below refits the model many times. Fits can come back with states renumbered (Section~\ref{sec:initrobust}), so before comparing any $A$ or $B$ across fits, each fit is mapped onto the reference fit ($\hat A_{\text{monthly}},\hat B_{\text{monthly}}$) by the permutation $\sigma$ of the three states that minimises $\max|A[\sigma,\sigma]-\hat A|+\max|B[\sigma,\cdot]-\hat B|$, and the lift name check is rerun. Fits whose states cannot be matched one-to-one (e.g.\ two \HML{} states) are counted and reported separately, not averaged in. This is relabelling by permutation matching \citep{stephens2000}.
 
@@ -798,6 +798,53 @@ approximately $\chi^2_{12}$ under no break \citep{wilks1938}, the likelihood ana
 
 \textbf{Methodology sources.} Bootstrap principles and percentile intervals: \citet{efron1993} (Chapman and Hall, 1993; no DOI for the print edition). Moving-block bootstrap for dependent data: \citet{kunsch1989} (\doi{10.1214/aos/1176347265}) and \citet{lahiri2003} (\doi{10.1007/978-1-4757-3803-2}). Bootstrap and Hessian-based confidence intervals for HMM parameters: \citet{visser2000} (\doi{10.1348/000711000159240}) and \citet{zucchini2016} (\doi{10.1201/b20790}). Observed information under EM: \citet{louis1982} (\doi{10.1111/j.2517-6161.1982.tb01203.x}). Label alignment: \citet{stephens2000} (\doi{10.1111/1467-9868.00265}).
 
+\subsection{Item 5: HAC inference on the factor data}\label{sec:hac}
+\textbf{Asked:} HAC testing on the factor data itself. (The note read ``HCA''; both readings were added as Items~5 and~6.)
+
+\textbf{Why it is needed.} Every standard error in this log and in the data diagnostics treats periods as independent: the $t$-statistics on factor means, the paired $t$-statistics against equal weight, the binomial standard error of hit rates and the paired log-score standard error. Factor returns may not be independent: monthly \HML{} has first-order autocorrelation 0.20 (data diagnostics), and financial returns commonly show volatility clustering, where large and small months bunch together (step~1 tests this here). Either can make independent-period standard errors misleading, most often too small. Heteroskedasticity- and autocorrelation-consistent (HAC) standard errors correct for both.
+
+\textbf{Planned procedure.}
+\begin{enumerate}
+\item \textbf{Diagnose first.} For each factor and window (full, training, test): Ljung--Box tests \citep{ljung1978} on returns (autocorrelation) and on squared returns (volatility clustering) at 12 and 24 lags monthly (52 and 104 weekly), and Engle's ARCH LM test \citep{engle1982}.
+\item \textbf{Factor premia with HAC standard errors.} Regress each factor's return on a constant; the intercept is the mean premium. Report the ordinary standard error, the heteroskedasticity-robust one \citep{white1980} and the Newey--West HAC one \citep{newey1987}. Lag length: the common rule of thumb $L=\lfloor 4(T/100)^{2/9}\rfloor$ ($L=6$ monthly, $L=9$ weekly), data-driven selection \citep{andrews1991,newey1994}, and $L=12$ and $24$ as sensitivity checks.
+\item \textbf{Did the premia change between halves?} Regress each factor on a constant and a test-window dummy with HAC standard errors; the dummy's coefficient is the change in mean premium after October 1976. This complements the structural-break test of Item~2, which concerns $A$ and $B$.
+\item \textbf{Re-do the existing inference with HAC standard errors:}
+\begin{itemize}
+\item hit rates: regress the hit indicator (1 if correct, 0 if not) on a constant; the HAC standard error of the intercept replaces the binomial one, allowing for streaks of hits;
+\item HMM versus raw-matrix log score: HAC standard error of the mean per-period difference, which is the Diebold--Mariano test proper \citep{diebold1995};
+\item holding rules versus equal weight: HAC standard error of the mean return difference, replacing the paired $t$-statistic;
+\item Sharpe ratios: HAC-adjusted standard errors \citep{lo2002}, alongside the block bootstrap already used.
+\end{itemize}
+\end{enumerate}
+\textbf{Reports:} Ljung--Box and ARCH $p$-values; a table of mean, ordinary, robust and HAC standard errors and $t$-statistics per factor and window, with the ratio of HAC to ordinary standard error; the premium-change coefficients; revised standard errors and $p$-values for hit rates, log-score differences, return differences and Sharpe ratios; a note on any conclusion that changes.
+
+\textbf{Implementation:} \texttt{statsmodels} OLS with \verb|cov_type='HAC'| and \verb|cov_kwds={'maxlags': L}| (Bartlett kernel by default; \citealp{statsmodels_hac}).
+
+\textbf{Methodology sources.} Newey--West HAC estimator: \citet{newey1987} (\doi{10.2307/1913610}). Kernel and bandwidth choice: \citet{andrews1991} (\doi{10.2307/2938229}); automatic lag selection: \citet{newey1994} (\doi{10.2307/2297912}). Heteroskedasticity-robust standard errors: \citet{white1980} (\doi{10.2307/1912934}). Autocorrelation test: \citet{ljung1978} (\doi{10.1093/biomet/65.2.297}). ARCH test: \citet{engle1982} (\doi{10.2307/1912773}). Forecast comparison with HAC variance: \citet{diebold1995} (\doi{10.1080/07350015.1995.10524599}). Sharpe-ratio standard errors under serial correlation: \citet{lo2002} (\doi{10.2469/faj.v58.n4.2453}). Software: \citet{statsmodels_hac} (\href{https://www.statsmodels.org/stable/generated/statsmodels.regression.linear_model.RegressionResults.get_robustcov_results.html}{statsmodels documentation}).
+
+\subsection{Item 6: Hierarchical cluster analysis of the factor data}\label{sec:hca}
+\textbf{Asked:} HCA testing on the factor data itself, read here as hierarchical cluster analysis.
+
+\textbf{Why it is useful.} It is a model-free check on the HMM's states. Clustering groups months by how similar their factor returns are, with no Markov structure and no use of time order. If the clusters resemble the HMM's leadership states, those states reflect real structure in returns. If the clusters look nothing like them, the regimes come mainly from the transition structure the HMM imposes.
+
+\textbf{Planned procedure.}
+\begin{enumerate}
+\item \textbf{Features.} For each month, the vector $(\SMB_t,\HML_t,\MOM_t)$, standardised by each factor's training-window mean and standard deviation so that \MOM's larger volatility does not dominate the distances. Variant: trailing 6-month average returns, which are smoother and closer to a ``regime'' view (overlapping windows; descriptive use only).
+\item \textbf{Clustering.} Euclidean distance with Ward linkage \citep{ward1963} as the main specification; average and complete linkage as robustness checks \citep{murtagh2012}.
+\item \textbf{Number of clusters.} Cut the tree at $k=3$ to match the HMM, and examine $k=2$ to $6$ using the average silhouette width \citep{rousseeuw1987} and the dendrogram's merge heights.
+\item \textbf{Naming clusters.} By each cluster's mean standardised return: the factor with the highest mean names the cluster, the clustering counterpart of the lift check.
+\item \textbf{Comparison with the HMM.} Cross-tabulate cluster labels against (a) the full-sample Viterbi states and (b) the observed top factor; summarise each with the adjusted Rand index \citep{hubert1985}, which is 0 for chance agreement and 1 for identical partitions.
+\item \textbf{Persistence of clusters.} Count transitions between consecutive months' cluster labels to form a cluster transition matrix. Diagonals near the cluster shares mean the clusters have no persistence of their own; the HMM's $a_{jj}$ of 0.86--0.90 would then come from the model's structure, not from the clustering of returns.
+\item \textbf{Out-of-sample variant.} Cluster the training months only, assign each test month to the nearest training centroid, and repeat steps 5--6 on the test window.
+\end{enumerate}
+\textbf{Reports:} dendrogram; silhouette width by $k$ for each linkage; cluster sizes and mean returns; contingency tables and adjusted Rand indices against the Viterbi states and the top factor; the cluster transition matrix with its diagonal.
+
+\textbf{Interpretation and caveats.} Clustering ignores time order and the HMM uses it, so disagreement does not show that either is wrong. It shows how much of the regime structure lives in single-month returns. Hierarchical clustering of 1{,}197 points is fast. A different use of HCA in finance clusters assets by return correlation \citep{mantegna1999}; with only three factors that version has little to show, but it would become informative if more factors (for example the five Fama--French factors plus momentum) were added.
+
+\textbf{Implementation:} \texttt{scipy.cluster.hierarchy.linkage} (method \texttt{'ward'}, \texttt{'average'}, \texttt{'complete'}) and \texttt{fcluster} with \texttt{criterion='maxclust'} \citep{scipy_hierarchy}; silhouette and adjusted Rand index from \texttt{scikit-learn}.
+
+\textbf{Methodology sources.} Ward linkage: \citet{ward1963} (\doi{10.1080/01621459.1963.10500845}). Overview of hierarchical clustering algorithms: \citet{murtagh2012} (\doi{10.1002/widm.53}). Choosing the number of clusters: \citet{rousseeuw1987} (\doi{10.1016/0377-0427(87)90125-7}). Comparing two partitions: \citet{hubert1985} (\doi{10.1007/BF01908075}). Textbook treatment (Chapter~14, Unsupervised Learning): \citet{hastie2009} (\doi{10.1007/978-0-387-84858-7}). Hierarchical clustering in financial markets: \citet{mantegna1999} (\doi{10.1007/s100510050929}). Software: \citet{scipy_hierarchy} (\href{https://docs.scipy.org/doc/scipy/reference/generated/scipy.cluster.hierarchy.linkage.html}{SciPy documentation}).
+
 \subsection{How the items fit together}
 \begin{center}
 \begin{tabularx}{\textwidth}{@{}lXl@{}}
@@ -808,12 +855,14 @@ Item & Question answered & Main output \\
 2 & Are $A$ and $B$ stable over time (time homogeneity)? Is any change significant? & $A$, $B$, walk-forward by window; break tests \\
 3 & Do $A$ and $B$ depend on the starting $A$? & Dispersion and walk-forward across 500 starts \\
 4 & How precisely are $A$ and $B$ estimated? & Standard errors, 95\% intervals, walk-forward ranges \\
+5 & Are our significance statements on the factor data and results robust to autocorrelation and volatility clustering? & HAC standard errors, revised $p$-values \\
+6 & Do the HMM's states appear in the factor data without a Markov model? & Clusters, adjusted Rand index vs HMM \\
 \bottomrule
 \end{tabularx}
 \end{center}
 Item 4 gives the yardstick for Items 2 and 3: variation across windows or starts that exceeds the bootstrap intervals is evidence of instability rather than sampling noise.
 
-\textbf{Approximate cost.} One monthly Baum--Welch run takes well under a second. Item 3 (500 single runs) takes minutes. Item 4 with the full procedure (20 starts per resample, 1{,}000 resamples, two block schemes) is about 40{,}000 runs, roughly one to two hours per scheme on monthly data; it can be run in parallel, or with 5 starts per resample if needed. The warm-start comparison takes minutes. The frozen walk-forward check adds about a second per fit (one forward pass over the test window), so a few minutes for Items~3 and~4; the refit version in Item~2 takes about two minutes per window position (about two hours for 61 positions). Item 1 with monthly refits takes a few minutes per fold. Weekly versions take roughly four to five times longer per run.
+\textbf{Approximate cost.} One monthly Baum--Welch run takes well under a second. Item 3 (500 single runs) takes minutes. Item 4 with the full procedure (20 starts per resample, 1{,}000 resamples, two block schemes) is about 40{,}000 runs, roughly one to two hours per scheme on monthly data; it can be run in parallel, or with 5 starts per resample if needed. The warm-start comparison takes minutes. The frozen walk-forward check adds about a second per fit (one forward pass over the test window), so a few minutes for Items~3 and~4; the refit version in Item~2 takes about two minutes per window position (about two hours for 61 positions). Item 1 with monthly refits takes a few minutes per fold. Weekly versions take roughly four to five times longer per run. Items~5 and~6 take seconds to minutes (regressions and one clustering per specification).
 
 %==========================================================================
 \section{Conclusions}
@@ -877,12 +926,12 @@ Seed & 348 \\
 
 \section{Citation map}\label{sec:citemap}
 BibTeX keys refer to \texttt{sta348\_references.bib}; cite with \verb|\citet{key}| or \verb|\citep{key}| (natbib).
-\begin{center}
-\small
-\begin{tabularx}{\textwidth}{@{}XXl@{}}
+{\small
+\begin{longtable}{@{}p{6.3cm}p{5.2cm}p{3.6cm}@{}}
 \toprule
 Method or claim & Source & Key \\
 \midrule
+\endhead
 HMM definition, three problems, scaling & \citet{rabiner1989} & \texttt{rabiner1989} \\
 Notation, informed initialisation (p.~15) & \citet{jurafsky_slp3} & \texttt{jurafsky\_slp3} \\
 HMMs for time series, multiple starts, Hessian SEs & \citet{zucchini2016} & \texttt{zucchini2016} \\
@@ -919,14 +968,28 @@ SMB, HML construction & \citet{fama1993} & \texttt{fama1993} \\
 Four-factor model, PR1YR & \citet{carhart1997} & \texttt{carhart1997} \\
 Momentum effect & \citet{jegadeesh1993} & \texttt{jegadeesh1993} \\
 Factor data & \citet{french_library} & \texttt{french\_library} \\
+Heteroskedasticity-robust standard errors & \citet{white1980} & \texttt{white1980} \\
+Newey--West HAC standard errors & \citet{newey1987} & \texttt{newey1987} \\
+HAC kernel and bandwidth & \citet{andrews1991} & \texttt{andrews1991} \\
+Automatic HAC lag selection & \citet{newey1994} & \texttt{newey1994} \\
+Ljung--Box autocorrelation test & \citet{ljung1978} & \texttt{ljung1978} \\
+ARCH test & \citet{engle1982} & \texttt{engle1982} \\
+Sharpe-ratio standard errors & \citet{lo2002} & \texttt{lo2002} \\
+HAC software & \citet{statsmodels_hac} & \texttt{statsmodels\_hac} \\
+Ward linkage & \citet{ward1963} & \texttt{ward1963} \\
+Hierarchical clustering algorithms & \citet{murtagh2012} & \texttt{murtagh2012} \\
+Silhouette width & \citet{rousseeuw1987} & \texttt{rousseeuw1987} \\
+Adjusted Rand index & \citet{hubert1985} & \texttt{hubert1985} \\
+Clustering (textbook) & \citet{hastie2009} & \texttt{hastie2009} \\
+Hierarchical structure in markets & \citet{mantegna1999} & \texttt{mantegna1999} \\
+Clustering software & \citet{scipy_hierarchy} & \texttt{scipy\_hierarchy} \\
 Software & \citet{hmmlearn} & \texttt{hmmlearn} \\
 HMM regimes, factor switching & \citet{wang2020} & \texttt{wang2020} \\
 HMM regimes on index returns & \citet{yuan2016} & \texttt{yuan2016} \\
 Regime per factor (jump model) & \citet{shu2024} & \texttt{shu2024} \\
 HMM allocation across smart-beta strategies & \citet{fons2021} & \texttt{fons2021} \\
 \bottomrule
-\end{tabularx}
-\end{center}
+\end{longtable}}
 
 \bibliographystyle{plainnat}
 \bibliography{sta348_references}
