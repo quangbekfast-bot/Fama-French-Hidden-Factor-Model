@@ -29,7 +29,7 @@
 \maketitle
 
 \begin{abstract}
-\noindent We model ``which equity factor is currently favoured'' as a hidden Markov chain over three states (\SMB, \HML, \MOM), observed through the factor that tops each period. The model is trained by Baum--Welch on the first half of the Ken French sample (1927--1976) and evaluated walk-forward on the second half (1976--2026), both on next-period prediction and on the returns earned by holding rules built on it. At monthly frequency the model finds clean, persistent regimes (expected durations of 7--10 months) whose labels survive every refit. Out of sample, however, it predicts the top factor no better than the raw transition matrix of observed tops (42.2\% vs 41.9\% hit rate; exact McNemar $p=0.90$), and no rule built on it beats an equal-weight factor portfolio on a risk-adjusted basis (best: probability tilt, Sharpe 0.63 vs 0.60; 95\% block-bootstrap interval for the difference $[-0.05,+0.12]$). Leadership regimes are real descriptively but carry no exploitable predictive content in this design.
+\noindent We model ``which equity factor is currently favoured'' as a hidden Markov chain over three states (\SMB, \HML, \MOM), observed through the factor that tops each period. The model is trained by Baum--Welch on the first half of the Ken French sample (1927--1976) and evaluated walk-forward on the second half (1976--2026), both on next-period prediction and on the returns earned by holding rules built on it. At monthly frequency the model finds clean, persistent regimes (expected durations of 7--10 months) whose labels survive every walk-forward refit. Out of sample, however, it predicts the top factor no better than the raw transition matrix of observed tops (42.2\% vs 41.9\% hit rate; exact McNemar $p=0.90$), and no rule built on it beats an equal-weight factor portfolio on a risk-adjusted basis (best: probability tilt, Sharpe 0.63 vs 0.60; 95\% block-bootstrap interval for the difference $[-0.05,+0.12]$). Leadership regimes are real descriptively but carry no exploitable predictive content in this design. A preliminary bootstrap and no-memory null test (Section~\ref{sec:bootnull}) find detectable but weak dependence in the top-factor sequence, wide intervals on persistence (expected durations of roughly 2 months to 4 years), and show that high fitted diagonals arise even in sequences with no memory.
 \end{abstract}
 
 \tableofcontents
@@ -66,7 +66,8 @@ Weekly run & French weekly 3-factor file plus daily momentum, compounded into Fr
 Monthly run & French monthly files; returns test added (Sections~\ref{sec:monthly}--\ref{sec:returns}). \\
 Diagnostics & Hit-rate comparison against the raw transition matrix; full-sample Viterbi encoding (Section~\ref{sec:viterbi}). \\
 Start check & Starting $A$ counted from data compared with the assumed $A^{(0)}$; the assumed start kept (Section~\ref{sec:initrobust}). \\
-TA feedback & Four validation extensions requested (cross-validation of the split, split-location sensitivity, randomised $A^{(0)}$, standard errors and a yearly block bootstrap). Specified in Section~\ref{sec:tafeedback}; \textbf{not yet implemented}. Cross-validation (Item~1) put on hold as covered by Items~2 and~4. Later added: HAC inference on the factor data (Item~5) and hierarchical cluster analysis of the factor data (Item~6). \\
+TA feedback & Four validation extensions requested (cross-validation of the split, split-location sensitivity, randomised $A^{(0)}$, standard errors and a yearly block bootstrap). Specified in Section~\ref{sec:tafeedback}; Item~4 partly implemented (Section~\ref{sec:bootnull}), the rest \textbf{not yet implemented}. Cross-validation (Item~1) put on hold as covered by Items~2 and~4. Later added: HAC inference on the factor data (Item~5) and hierarchical cluster analysis of the factor data (Item~6). \\
+Bootstrap and null & Yury's scripts (branch \texttt{bootstrap\_null\_tests}, 14 November): parametric and 12-month moving-block bootstraps of $A$ and $B$ with cold-start refits, and a no-memory null test. Preliminary runs (200 repetitions) reported in Section~\ref{sec:bootnull}. \\
 \bottomrule
 \end{longtable}
 
@@ -758,6 +759,8 @@ approximately $\chi^2_{12}$ under no break \citep{wilks1938}, the likelihood ana
 \textbf{Methodology sources.} EM converges to a local maximum that depends on its start: \citet{dempster1977} (\doi{10.1111/j.2517-6161.1977.tb01600.x}); multiple starting values for HMMs: \citet{zucchini2016} (\doi{10.1201/b20790}); role of initial conditions in HMM training: \citet[p.~15]{jurafsky_slp3} (\href{https://web.stanford.edu/~jurafsky/slp3/A.pdf}{web.stanford.edu/\textasciitilde jurafsky/slp3/A.pdf}). Label alignment: \citet{stephens2000} (\doi{10.1111/1467-9868.00265}).
 
 \subsection{Item 4: Standard errors and a yearly block bootstrap for $A$ and $B$}
+\textbf{Status:} partly implemented (moving-block and parametric bootstraps with cold-start refits); preliminary results in Section~\ref{sec:bootnull}.
+
 \textbf{Asked:} standard errors for both $A$ and $B$; a moving block bootstrap on a yearly basis that resamples the sequence of training years about 1{,}000 times, refits $A$ and $B$ each time and gives confidence intervals.
 
 \textbf{(a) Analytic standard errors (observed information).}
@@ -865,9 +868,131 @@ Item 4 gives the yardstick for Items 2 and 3: variation across windows or starts
 \textbf{Approximate cost.} One monthly Baum--Welch run takes well under a second. Item 3 (500 single runs) takes minutes. Item 4 with the full procedure (20 starts per resample, 1{,}000 resamples, two block schemes) is about 40{,}000 runs, roughly one to two hours per scheme on monthly data; it can be run in parallel, or with 5 starts per resample if needed. The warm-start comparison takes minutes. The frozen walk-forward check adds about a second per fit (one forward pass over the test window), so a few minutes for Items~3 and~4; the refit version in Item~2 takes about two minutes per window position (about two hours for 61 positions). Item 1 with monthly refits takes a few minutes per fold. Weekly versions take roughly four to five times longer per run. Items~5 and~6 take seconds to minutes (regressions and one clustering per specification).
 
 %==========================================================================
+\section{Results: bootstrap and no-memory null test (preliminary)}\label{sec:bootnull}
+
+Yury implemented part of TA Item~4 together with a test that Item~4 did not ask for: whether the training sequence shows any memory at all. The scripts are \texttt{param\_boot.py}, \texttt{null\_test.py} and \texttt{null\_extra.py} in \texttt{code/analysis/}, pushed on 14 November 2026 to the branch \texttt{bootstrap\_null\_tests} (not yet merged into \texttt{main}). All runs use the monthly main specification (Section~\ref{sec:monthly}) and its training window only (598 months, January 1927 -- October 1976); the test window is not touched.
+
+\textbf{Status: preliminary.} The scripts default to 1{,}000 repetitions. The numbers below come from 200 repetitions of each bootstrap and 190 of 200 null simulations (the null run hit a time limit; none failed). Each repetition repeats the full 20-start fit, about 2.5 seconds on two cores, so a full run takes roughly 40 minutes per scheme. Medians and interval endpoints will move somewhat at 1{,}000 repetitions; the endpoints are the least precise.
+
+\subsection{Method: bootstrap of $A$ and $B$}
+Each repetition builds a pseudo-training sequence of 598 monthly top-factor labels, refits the model to it, and records the refitted parameters. Two schemes generate the pseudo-sequences.
+\begin{enumerate}
+\item \textbf{Parametric bootstrap} \citep{efron1993,visser2000}. Treat the fitted model $(\pi,\hat A,\hat B)$ as the true process and run it forward: draw $q_1$ from $\pi$ (uniform); in each month draw the label $O_t$ from row $q_t$ of $\hat B$ and the next state $q_{t+1}$ from row $q_t$ of $\hat A$. Keep the 598 labels and discard the states, so the pseudo-sequence has the same form as the real data.
+\item \textbf{Moving-block bootstrap} \citep{kunsch1989,lahiri2003}. Draw $\lceil 598/12\rceil=50$ blocks of 12 consecutive training months, each starting at a random month (blocks may overlap), join them in the order drawn and cut to 598 months. Dependence within each block is kept; the joins are artificial.
+\end{enumerate}
+\textbf{Refit (cold start).} Each pseudo-sequence is refitted by the full original procedure, not warm-started from $\hat A,\hat B$ (Item~4 rationale): top-factor shares $\hat p$ recomputed from the pseudo-sequence; $B^{(0)}$ rebuilt from that $\hat p$ (own factor doubled, rows renormalised); $A^{(0)}$ with $0.8$ on the diagonal and $0.1$ elsewhere; $\pi$ fixed at $1/3$; 20 Baum--Welch starts (the soft start plus 19 jittered copies, Section~\ref{sec:start}); best log-likelihood kept. The fitted $\hat A,\hat B$ enter only as the simulation model in scheme~1 and as the reference for label alignment.
+
+\textbf{Label alignment.} A refit may number its states differently. Among the six orderings of the states, the one minimising $\max|A_\sigma-\hat A|+\max|B_\sigma-\hat B|$ is applied before any comparison \citep{stephens2000}.
+
+\textbf{Name check.} Lift is recomputed with the pseudo-sequence's shares; a refit ``keeps its names'' if every state's lift is highest on its own factor and above~1.
+
+\textbf{Reported.} Median and 95\% percentile interval (2.5th--97.5th percentile) of each quantity across repetitions \citep{efron1993}. Medians are reported rather than means because a refitted diagonal close to 1 implies an extremely long expected duration and distorts the mean.
+
+\textbf{Differences from the Item~4 plan.} (i) The blocks are 12-month moving blocks (the plan's variant), not calendar-year blocks. (ii) A parametric bootstrap is added. (iii) Not yet done: analytic (Hessian) standard errors, the warm-start comparison, longer blocks, and running each bootstrapped $(A,B)$ frozen on the test window.
+
+\subsection{Results: bootstrap}
+\begin{center}
+\small
+\begin{tabular}{l c cc cc}
+\toprule
+ & Fitted & \multicolumn{2}{c}{Parametric (200)} & \multicolumn{2}{c}{Moving block, 12 m (200)} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}
+Quantity & value & Median & 95\% interval & Median & 95\% interval \\
+\midrule
+$a_{\textsc{smb},\textsc{smb}}$ & 0.864 & 0.871 & [0.42, 0.98] & 0.849 & [0.44, 0.98] \\
+$a_{\textsc{hml},\textsc{hml}}$ & 0.899 & 0.898 & [0.51, 0.98] & 0.845 & [0.36, 0.98] \\
+$a_{\textsc{mom},\textsc{mom}}$ & 0.857 & 0.863 & [0.50, 0.97] & 0.840 & [0.33, 0.98] \\
+\midrule
+Duration \SMB{} (months) & 7.4 & 7.8 & [1.7, 46.7] & 6.6 & [1.8, 40.4] \\
+Duration \HML{} (months) & 9.9 & 9.8 & [2.0, 46.9] & 6.5 & [1.6, 47.5] \\
+Duration \MOM{} (months) & 7.0 & 7.3 & [2.0, 34.4] & 6.3 & [1.5, 43.1] \\
+\midrule
+$b_{\textsc{smb}}(\textsc{smb})$ & 0.398 & 0.419 & [0.28, 0.94] & 0.386 & [0.00, 0.78] \\
+$b_{\textsc{hml}}(\textsc{hml})$ & 0.472 & 0.487 & [0.32, 0.82] & 0.488 & [0.25, 0.98] \\
+$b_{\textsc{mom}}(\textsc{mom})$ & 0.670 & 0.676 & [0.44, 0.96] & 0.606 & [0.35, 1.00] \\
+\midrule
+Own-factor lift \SMB & 1.63 & 1.68 & [1.21, 3.62] & 1.59 & [0.00, 3.12] \\
+Own-factor lift \HML & 1.62 & 1.67 & [1.12, 2.89] & 1.72 & [0.86, 3.31] \\
+Own-factor lift \MOM & 1.44 & 1.45 & [0.96, 2.10] & 1.29 & [0.76, 2.28] \\
+\midrule
+Refits keeping all three names & --- & \multicolumn{2}{c}{75.0\%} & \multicolumn{2}{c}{56.0\%} \\
+Refits needing no relabelling & --- & \multicolumn{2}{c}{84.5\%} & \multicolumn{2}{c}{69.0\%} \\
+\bottomrule
+\end{tabular}
+\end{center}
+\noindent All six off-diagonal entries of $A$ have intervals starting at 0 in both schemes (upper ends 0.28--0.62).
+
+\textbf{Reading.}
+\begin{itemize}
+\item \textbf{Persistence is poorly determined.} The diagonals are centred near the fitted values, but every interval runs from roughly 0.35--0.5 up to 0.98, which in expected duration is about 2 months to about 4 years. The reported 7--10 month regimes are one point inside that range.
+\item \textbf{Rotation is not identified.} No transition between factors is distinguishable from zero, so the data cannot say which factor tends to take over from which.
+\item \textbf{Emissions are loose and the names are fragile.} The own-factor emission probabilities have wide intervals, and a full refit keeps all three names in only 75\% (parametric) or 56\% (block) of repetitions. The \MOM{} state is the weakest: its lift interval includes 1 under both schemes.
+\item \textbf{The real data vary more than the model allows.} Block intervals are wider than parametric ones, especially for \HML{} and \MOM, and the block medians sit lower. The parametric bootstrap assumes a time-homogeneous HMM is the true process; the block bootstrap does not. The gap is consistent with the doubts about time homogeneity (Item~2), although the block joins also cut regimes and push persistence down.
+\end{itemize}
+
+\subsection{Method: no-memory null test}
+\textbf{Null hypothesis.} The monthly top factor has no memory: each training month's label is an independent draw with the training shares (\SMB{} 0.244, \HML{} 0.291, \MOM{} 0.465).
+
+\textbf{Procedure.}
+\begin{enumerate}
+\item Simulate 598 independent labels with those shares.
+\item Fit three models to the simulated sequence: no memory (shares only); a plain Markov chain on the labels (transition matrix from counts); and the HMM by the same cold-start procedure as above.
+\item Record label-free statistics: log-likelihood gains over the no-memory model; the HMM diagonals ranked from largest to smallest and the implied durations; and the second-largest eigenvalue modulus $|\lambda_2|$ of each fitted transition matrix (zero for a memoryless chain, larger with more memory).
+\item Repeat, then compute the same statistics on the real training sequence.
+\end{enumerate}
+\textbf{Monte Carlo $p$-value} \citep{davison1997}: the share of simulated sequences whose statistic is at least the real value, $p=\#\{\text{null}\ge\text{real}\}/190$ (one-sided; resolution about $1/190$; a count of zero is reported as $p<0.01$, equivalently $(0+1)/(190+1)\approx0.005$).
+
+\subsection{Results: null test}
+\begin{center}
+\small
+\begin{tabular}{l c ccc c}
+\toprule
+ & & \multicolumn{3}{c}{Null, 190 no-memory sequences} & \\
+\cmidrule(lr){3-5}
+Statistic & Real & Median & 95th pct. & \# $\ge$ real & $p$ \\
+\midrule
+HMM log-likelihood gain over no memory & 12.68 & 3.15 & 6.99 & 0 & $<0.01$ \\
+Markov-chain gain over no memory & 4.49 & 1.69 & 3.78 & 6 & 0.03 \\
+$|\lambda_2|$, Markov chain on labels & 0.117 & 0.049 & 0.097 & 3 & 0.02 \\
+$|\lambda_2|$, HMM transition matrix & 0.849 & 0.640 & 0.960 & 56 & 0.30 \\
+Largest HMM diagonal & 0.899 & 0.896 & 0.997 & 94 & 0.49 \\
+Smallest HMM diagonal & 0.857 & 0.488 & 0.872 & 12 & 0.06 \\
+Duration of stickiest state (months) & 9.9 & 9.6 & 306 & 94 & 0.49 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\noindent Real training log-likelihoods: no memory $-633.61$, Markov chain $-629.12$, HMM $-620.93$.
+
+\textbf{Reading.}
+\begin{itemize}
+\item \textbf{The real sequence is not memoryless.} The HMM's likelihood gain beats all 190 null sequences, and the plain Markov chain's gain and $|\lambda_2|$ are also above the 95th null percentile. There is some dependence in which factor tops next month.
+\item \textbf{One sticky state is not evidence of persistence.} Fitted to sequences with no memory, the HMM still produces a largest diagonal around 0.90 and a stickiest-state duration around 10 months. The real values sit at the null median ($p\approx0.5$), so the headline durations cannot by themselves be read as persistence.
+\item \textbf{Three sticky states is mildly unusual.} Null fits typically have only one or two sticky states (median smallest diagonal 0.49); only 10\% of them have all three diagonals at or above 0.8. The real fit's smallest diagonal of 0.857 gives $p=0.06$: suggestive, not significant.
+\item \textbf{Consistent with BIC and the forecasting results.} The gain of 12.7 log-likelihood units uses 10 extra parameters; the BIC penalty for those is $5\ln 598\approx 32$, so BIC still prefers no memory (Section~\ref{sec:monthly}). The dependence is detectable but small, which matches the absence of out-of-sample forecasting gains.
+\item \textbf{Not yet tested: does the hidden layer beat a plain Markov chain?} The HMM's gain over the Markov chain cannot be judged against a memoryless null. \texttt{null\_extra.py --null-markov} simulates from the fitted Markov chain instead and is the right test; it has not been run.
+\end{itemize}
+
+\subsection{Outputs, reproduction and next steps}
+Outputs: \texttt{results/bootstrap\_null\_prelim/} (\texttt{boot\_param.csv}, \texttt{boot\_block12.csv}, \texttt{null\_iid.csv}; one row per repetition). Commands, from the repository root on branch \texttt{bootstrap\_null\_tests}:
+{\footnotesize
+\begin{verbatim}
+python code/analysis/param_boot.py --method parametric --reps 200 --workers 2 \
+       --out results/bootstrap_null_prelim/boot_param.csv
+python code/analysis/param_boot.py --method block --block-len 12 --reps 200 \
+       --workers 2 --out results/bootstrap_null_prelim/boot_block12.csv
+python code/analysis/param_boot.py --summarize results/bootstrap_null_prelim/boot_*.csv
+python code/analysis/null_test.py --null --reps 200 --workers 2 \
+       --out results/bootstrap_null_prelim/null_iid.csv
+python code/analysis/null_test.py --compare results/bootstrap_null_prelim/null_iid.csv
+\end{verbatim}
+}
+Seeds are the script defaults (348 for the bootstrap, 3480 for the null). Next steps: rerun at 1{,}000 repetitions; run the Markov-chain null and the power check in \texttt{null\_extra.py}; add calendar-year and longer (24- and 36-month) blocks; complete the rest of Item~4 (Hessian standard errors, warm-start comparison, frozen walk-forward of each bootstrapped $(A,B)$).
+
+%==========================================================================
 \section{Conclusions}
 \begin{enumerate}
 \item \textbf{Regimes exist descriptively.} Monthly leadership states are persistent (7--10 months), interpretable through lift and state-conditional returns, stable across restarts and refits, and line up with known episodes.
+\item \textbf{But persistence is weakly identified.} The bootstrap intervals for the diagonals of $A$ run from about 0.35--0.5 to 0.98, no factor-to-factor transition is distinguishable from zero, and full refits keep the state names in only 56--75\% of resamples. The no-memory null test finds real but weak dependence and shows that a high fitted diagonal on its own is not evidence of persistence (Section~\ref{sec:bootnull}).
 \item \textbf{No predictive gain.} Out of sample the HMM matches but does not beat the raw transition matrix or ``always the most frequent factor'' on hit rate or log score, weekly or monthly. In-sample BIC agrees: the hidden layer does not pay for its parameters.
 \item \textbf{No risk-adjusted return gain.} No rule beats equal weight on Sharpe; the HMM probability tilt comes closest (+0.02 gross, $<0.01$ net).
 \item \textbf{Design-document prediction rule should be replaced.} Predicting the most likely state is clearly worse (32--36\% hit rate) than predicting the most likely top factor via $B$.
@@ -878,7 +1003,7 @@ The validation extensions requested by the TA (Section~\ref{sec:tafeedback}) add
 \begin{itemize}
 \item \textbf{Encoding loses magnitude.} The argmax discards how much a factor won by; Gaussian emissions on the return vector would use it (at the cost of normality assumptions and more parameters).
 \item \textbf{Regime instability across halves.} Training (1927--1976) and test (1976--2026) differ (e.g.\ \MOM{} tops 46.5\% vs 41.9\%; the 2009 crash). A rolling estimation window may adapt better than an expanding one.
-\item \textbf{Single split.} Results rest on one chronological split; alternative splits and a parametric bootstrap of $A$ would quantify estimation uncertainty.
+\item \textbf{Single split.} Results rest on one chronological split; alternative splits (Item~2) are still needed. A preliminary bootstrap of $A$ and $B$ is reported in Section~\ref{sec:bootnull}.
 \item \textbf{Investability.} The factors are paper long--short portfolios; the cost model is a simple 10 bp per unit traded.
 \item \textbf{Candidate extension.} A capped probability tilt (weights within a band around $1/3$) is the only rule that came close to improving on equal weight without large risk or turnover.
 \end{itemize}
@@ -958,6 +1083,7 @@ Bootstrap critical values for break tests & \citet{hansen2000} & \texttt{hansen2
 Multiple structural breaks & \citet{baiperron1998} & \texttt{baiperron1998} \\
 Homogeneity test for Markov chains & \citet{anderson1957} & \texttt{anderson1957} \\
 Bootstrap (general) & \citet{efron1993} & \texttt{efron1993} \\
+Monte Carlo $p$-values, parametric bootstrap & \citet{davison1997} & \texttt{davison1997} \\
 Moving-block bootstrap & \citet{kunsch1989,lahiri2003} & \texttt{kunsch1989}, \texttt{lahiri2003} \\
 Observed information under EM & \citet{louis1982} & \texttt{louis1982} \\
 Confidence intervals for HMM parameters & \citet{visser2000} & \texttt{visser2000} \\
