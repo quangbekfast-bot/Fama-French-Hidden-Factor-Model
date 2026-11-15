@@ -68,6 +68,7 @@ Diagnostics & Hit-rate comparison against the raw transition matrix; full-sample
 Start check & Starting $A$ counted from data compared with the assumed $A^{(0)}$; the assumed start kept (Section~\ref{sec:initrobust}). \\
 TA feedback & Four validation extensions requested (cross-validation of the split, split-location sensitivity, randomised $A^{(0)}$, standard errors and a yearly block bootstrap). Specified in Section~\ref{sec:tafeedback}; Item~4 partly implemented (Section~\ref{sec:bootnull}), the rest \textbf{not yet implemented}. Cross-validation (Item~1) put on hold as covered by Items~2 and~4. Later added: HAC inference on the factor data (Item~5) and hierarchical cluster analysis of the factor data (Item~6). \\
 Bootstrap and null & Yury's scripts (branch \texttt{bootstrap\_null\_tests}, 14 November): parametric and 12-month moving-block bootstraps of $A$ and $B$ with cold-start refits, and a no-memory null test. Preliminary runs (200 repetitions) reported in Section~\ref{sec:bootnull}. \\
+Initial distribution & Main monthly run repeated with $\pi$ fixed at the training top-factor shares instead of uniform; no material change (Section~\ref{sec:pirobust}). \\
 \bottomrule
 \end{longtable}
 
@@ -116,7 +117,7 @@ An HMM $\lambda=(A,B,\pi)$ \citep{rabiner1989,zucchini2016}, in the notation of 
 Assumptions: first-order Markov property $P(q_t\mid q_{1:t-1})=P(q_t\mid q_{t-1})$ and output independence $P(o_t\mid q_{1:T},o_{-t})=P(o_t\mid q_t)$.
 
 \subsection{Initial distribution}
-$\pi$ is fixed at $(1/3,1/3,1/3)$ and not re-estimated. With a single long sequence, $\pi$ is informed by one observation, EM drives it to a corner, and it affects only the first few periods. (Option \texttt{--pi train} fixes it at the training top-factor frequencies instead.)
+$\pi$ is fixed at $(1/3,1/3,1/3)$ and not re-estimated. With a single long sequence, $\pi$ is informed by one observation, EM drives it to a corner, and it affects only the first few periods. (Option \texttt{--pi train} fixes it at the training top-factor frequencies instead; this makes no material difference, Section~\ref{sec:pirobust}.)
 
 \subsection{Learning: Baum--Welch with soft naming}
 \textbf{E-step} (scaled to avoid underflow, as in \citealp{rabiner1989}). Forward: $\alpha_1(j)=\pi_j b_j(o_1)$, $\alpha_t(j)=\big[\sum_i\alpha_{t-1}(i)a_{ij}\big]b_j(o_t)$. Backward: $\beta_T(i)=1$, $\beta_t(i)=\sum_j a_{ij}b_j(o_{t+1})\beta_{t+1}(j)$. Then
@@ -621,6 +622,45 @@ Weekly, version 2 does not just rotate labels: its best solution is about 3 log-
 \subsection{Conclusion}
 A data-built $A^{(0)}$ adds no information: it reaches the same structure up to a renumbering of states (monthly) or a slightly worse local optimum (weekly). The counted transitions have weak persistence and, monthly, every row leans toward \MOM, so they pull all states toward the same pattern and override the tilt in $B^{(0)}$. The assumed, symmetric $A^{(0)}$ leaves the naming to $B^{(0)}$ and was kept.
 
+%==========================================================================
+\section{Robustness: uniform versus data-built initial distribution $\pi$}\label{sec:pirobust}
+
+\textbf{Method.} The monthly main specification was rerun with $\pi$ fixed at the training top-factor shares instead of $1/3$ each (option \texttt{--pi train}); everything else is identical (same $A^{(0)}$, $B^{(0)}$, 20 starts, seed 348, refit every month in the walk-forward test). In both versions $\pi$ is held fixed, not re-estimated.
+\[
+\pi^{\text{uniform}}=(1/3,\ 1/3,\ 1/3),\qquad
+\pi^{\text{train}}=\hat p=\Big(\tfrac{146}{598},\ \tfrac{174}{598},\ \tfrac{278}{598}\Big)=(0.244,\ 0.291,\ 0.465).
+\]
+
+\textbf{Results.}
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+ & $\pi$ uniform (main) & $\pi$ = training shares \\
+\midrule
+Training log-likelihood & $-620.93$ & $-620.72$ \\
+Diagonal of $\hat A$ (\SMB, \HML, \MOM) & 0.864, 0.899, 0.857 & 0.862, 0.903, 0.857 \\
+Expected durations (months) & 7.4, 9.9, 7.0 & 7.3, 10.3, 7.0 \\
+Own-factor emission $\hat b_j(j)$ & 0.398, 0.472, 0.670 & 0.399, 0.467, 0.666 \\
+Own-factor lift & 1.63, 1.62, 1.44 & 1.63, 1.60, 1.43 \\
+Starts keeping the soft names & 95\% & 95\% \\
+Walk-forward refits where names drifted & 0 of 598 & 0 of 598 \\
+\midrule
+Hit rate, HMM most likely top factor & 42.2\% & 41.7\% \\
+Hit rate, raw MLE transition matrix & 41.9\% & 41.9\% \\
+Average log score, HMM & $-1.0893$ & $-1.0892$ \\
+\midrule
+Sharpe, HMM probability tilt (gross / net) & 0.625 / 0.608 & 0.625 / 0.608 \\
+Sharpe, HMM most likely top factor (gross / net) & 0.515 / 0.489 & 0.521 / 0.496 \\
+Sharpe, equal weight & 0.604 & 0.604 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Reading.} The choice of $\pi$ makes no material difference. The trained $A$ and $B$ agree to within 0.005, the log-likelihood differs by 0.2, and the hit rate differs by three test months out of 599 (0.5 percentage points, well inside one standard error of 2.0 points). This is expected: $\pi$ enters the likelihood only through the first of 598 training months, and in the walk-forward test the forward filter starts from $\pi$ in January 1927, so its effect has washed out long before the first forecast in 1976. The uniform $\pi$ is kept for the main specification.
+
+Outputs: \texttt{results/monthly\_pitrain/}. Command: as for the monthly main run (Reproduction appendix) with \texttt{--pi train} added.
+
+%==========================================================================
 \section{Historical encoding: full-sample Viterbi (monthly)}\label{sec:viterbi}
 
 For description only, the model was refitted on the full monthly sample (warm-started from the training fit; names held) and decoded with Viterbi. This uses hindsight.

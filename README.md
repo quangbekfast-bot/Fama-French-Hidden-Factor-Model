@@ -18,12 +18,14 @@ data/
   clean/                    model inputs: factor returns (decimals), top factor, train/test label
 results/
   monthly_main/             main specification (monthly, refit every month) + full-sample Viterbi
+  monthly_pitrain/          monthly main specification with pi fixed at training shares (robustness; no material change)
   monthly_volscaled/        monthly with volatility scaling (state names fail; not used)
   weekly_refit/             weekly, refit every week
   weekly_frozen/            weekly, A and B frozen after training
   weekly_volscaled/         weekly with volatility scaling
   pilot_sp_indices_10y/     S&P index pilot (states track market direction; abandoned)
   simulation_check/         fit on data simulated from a known model (estimator check)
+  bootstrap_null_prelim/    Yury's bootstrap of A and B and no-memory null test (preliminary, 200 reps)
 docs/
   sta348_build_log.pdf/.tex build log (LaTeX source included; compile with pdflatex, bibtex, pdflatex x2)
   sta348_references.bib     all references with verified DOIs; keys listed in the build log's Citation map appendix
