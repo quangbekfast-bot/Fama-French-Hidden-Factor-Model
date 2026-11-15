@@ -69,7 +69,7 @@ Useful options: `--vol-scale`, `--refit-every k`, `--pi train`, `--cost-bps`, `-
 
 ## Analysis scripts (`code/analysis/`)
 
-Written to produce specific build-log numbers. Each takes paths as arguments; the first argument is the folder containing `sta348_hmm_v1.py` (i.e. `code`).
+Written to produce specific build-log numbers. Each takes paths as arguments; the first argument is the folder containing `sta348_hmm_v1.py` (i.e. `code`). Yury's three scripts instead take `--repo` (default: current folder) and are run from the repository root; preliminary results are in `results/bootstrap_null_prelim/` (build log Section 14).
 
 | Script | Produces | Example |
 |---|---|---|
@@ -79,6 +79,9 @@ Written to produce specific build-log numbers. Each takes paths as arguments; th
 | `viterbi_full.py` | full-sample refit and Viterbi spells | `python code/analysis/viterbi_full.py code results/monthly_main <ff3> <mom>` |
 | `freefit.py` | free fit from 100 random starts, named afterwards | `python code/analysis/freefit.py code <ff3> <mom> results/monthly_main` |
 | `init_compare.py` | assumed vs data-built starting A | `python code/analysis/init_compare.py code monthly <ff3> <mom>` |
+| `param_boot.py` | parametric and moving-block bootstrap of A and B, cold-start refits (Yury) | `python code/analysis/param_boot.py --method block --block-len 12 --reps 1000 --out boot_block12.csv` |
+| `null_test.py` | no-memory null test: real training sequence vs simulated memoryless sequences (Yury) | `python code/analysis/null_test.py --null --reps 1000 --out null_iid.csv`, then `--compare null_iid.csv` |
+| `null_extra.py` | Markov-chain null (does the hidden layer help?) and power check (Yury); needs the two scripts above | `python code/analysis/null_extra.py --null-markov ...` |
 | `datadiag.py` | data diagnostics: raw file checks, rows dropped, week alignment, summary statistics, top-factor counts | `python code/analysis/datadiag.py code <monthly ff3> <monthly mom> <weekly ff3> <daily mom>` |
 
 ## Headline result
