@@ -29,7 +29,7 @@
 \maketitle
 
 \begin{abstract}
-\noindent We model ``which equity factor is currently favoured'' as a hidden Markov chain over three states (\SMB, \HML, \MOM), observed through the factor that tops each period. The model is trained by Baum--Welch on the first half of the Ken French sample (1927--1976) and evaluated walk-forward on the second half (1976--2026), both on next-period prediction and on the returns earned by holding rules built on it. At monthly frequency the model finds clean, persistent regimes (expected durations of 7--10 months) whose labels survive every walk-forward refit. Out of sample, however, it predicts the top factor no better than the raw transition matrix of observed tops (42.2\% vs 41.9\% hit rate; exact McNemar $p=0.90$), and no rule built on it beats an equal-weight factor portfolio on a risk-adjusted basis (best: probability tilt, Sharpe 0.63 vs 0.60; 95\% block-bootstrap interval for the difference $[-0.05,+0.12]$). Leadership regimes are real descriptively but carry no exploitable predictive content in this design. A preliminary bootstrap and no-memory null test (Section~\ref{sec:bootnull}) find detectable but weak dependence in the top-factor sequence, wide intervals on persistence (expected durations of roughly 2 months to 4 years), and show that high fitted diagonals arise even in sequences with no memory.
+\noindent We model ``which equity factor is currently favoured'' as a hidden Markov chain over three states (\SMB, \HML, \MOM), observed through the factor that tops each period. The model is trained by Baum--Welch on the first half of the Ken French sample (1927--1976) and evaluated walk-forward on the second half (1976--2026), both on next-period prediction and on the returns earned by holding rules built on it. At monthly frequency the model finds clean, persistent regimes (expected durations of 7--10 months) whose labels survive every walk-forward refit. Out of sample, however, it predicts the top factor no better than the raw transition matrix of observed tops (42.2\% vs 41.9\% hit rate; exact McNemar $p=0.90$), and no rule built on it beats an equal-weight factor portfolio on a risk-adjusted basis (best: probability tilt, Sharpe 0.63 vs 0.60; 95\% block-bootstrap interval for the difference $[-0.05,+0.12]$). Leadership regimes are real descriptively but carry no exploitable predictive content in this design. A preliminary bootstrap and no-memory null test (Section~\ref{sec:bootnull}) find detectable but weak dependence in the top-factor sequence, wide intervals on persistence (expected durations of roughly 2 months to 4 years), and show that high fitted diagonals arise even in sequences with no memory. Preliminary time-homogeneity tests (Section~\ref{sec:homog}) do not reject a stable model but have little power; a sliding window suggests that persistence declined over the century.
 \end{abstract}
 
 \tableofcontents
@@ -66,8 +66,9 @@ Weekly run & French weekly 3-factor file plus daily momentum, compounded into Fr
 Monthly run & French monthly files; returns test added (Sections~\ref{sec:monthly}--\ref{sec:returns}). \\
 Diagnostics & Hit-rate comparison against the raw transition matrix; full-sample Viterbi encoding (Section~\ref{sec:viterbi}). \\
 Start check & Starting $A$ counted from data compared with the assumed $A^{(0)}$; the assumed start kept (Section~\ref{sec:initrobust}). \\
-TA feedback & Four validation extensions requested (cross-validation of the split, split-location sensitivity, randomised $A^{(0)}$, standard errors and a yearly block bootstrap). Specified in Section~\ref{sec:tafeedback}; Item~4 partly implemented (Section~\ref{sec:bootnull}), the rest \textbf{not yet implemented}. Cross-validation (Item~1) put on hold as covered by Items~2 and~4. Later added: HAC inference on the factor data (Item~5) and hierarchical cluster analysis of the factor data (Item~6). \\
+TA feedback & Four validation extensions requested (cross-validation of the split, split-location sensitivity, randomised $A^{(0)}$, standard errors and a yearly block bootstrap). Specified in Section~\ref{sec:tafeedback}; Item~4 partly implemented (Section~\ref{sec:bootnull}) and Item~2 implemented (Section~\ref{sec:homog}); the rest \textbf{not yet implemented}. Cross-validation (Item~1) put on hold as covered by Items~2 and~4. Later added: HAC inference on the factor data (Item~5) and hierarchical cluster analysis of the factor data (Item~6). \\
 Bootstrap and null & Yury's scripts (branch \texttt{bootstrap\_null\_tests}, 14 November): parametric and 12-month moving-block bootstraps of $A$ and $B$ with cold-start refits, and a no-memory null test. Preliminary runs (200 repetitions) reported in Section~\ref{sec:bootnull}. \\
+Time homogeneity & Yury's scripts (15 November): sliding window, known- and unknown-date break tests, restricted variants and entry-by-entry comparison. Preliminary runs reported in Section~\ref{sec:homog}. \\
 Initial distribution & Main monthly run repeated with $\pi$ fixed at the training top-factor shares instead of uniform; no material change (Section~\ref{sec:pirobust}). \\
 \bottomrule
 \end{longtable}
@@ -746,6 +747,8 @@ Period & State & Avg return (\%/month) & Episode \\
 \textbf{Methodology sources.} Forward-chaining (rolling-origin) evaluation: \citet{tashman2000} (\doi{10.1016/S0169-2070(00)00065-0}). Validity of cross-validation for time series: \citet{bergmeir2018} (\doi{10.1016/j.csda.2017.11.003}).
 
 \subsection{Item 2: Time homogeneity --- sensitivity to where the split falls}
+\textbf{Status:} implemented by Yury; preliminary results (reduced repetitions, $L=480$ only) in Section~\ref{sec:homog}.
+
 \textbf{Asked:} keep the 50:50 ratio but shrink the time interval uniformly so it can be moved through the sample; refit $A$ and $B$ at each position and look at their dispersion.
 
 \textbf{Planned procedure (sliding fixed-length window):}
@@ -1029,10 +1032,126 @@ python code/analysis/null_test.py --compare results/bootstrap_null_prelim/null_i
 Seeds are the script defaults (348 for the bootstrap, 3480 for the null). Next steps: rerun at 1{,}000 repetitions; run the Markov-chain null and the power check in \texttt{null\_extra.py}; add calendar-year and longer (24- and 36-month) blocks; complete the rest of Item~4 (Hessian standard errors, warm-start comparison, frozen walk-forward of each bootstrapped $(A,B)$).
 
 %==========================================================================
+\section{Results: time homogeneity (TA Item 2, preliminary)}\label{sec:homog}
+
+Yury implemented TA Item~2 in \texttt{homog\_test.py} and \texttt{homog\_extra.py} (\texttt{code/analysis/}, pushed to \texttt{main} on 15 November 2026). Both reuse the full estimation procedure of the main specification (soft start, 20 starts, best log-likelihood kept, labels aligned to the main monthly fit, lift name check) and the repository's own walk-forward code. All runs use the monthly data (1{,}197 months, January 1927 -- September 2026).
+
+\textbf{Status: preliminary.} Run on 15--16 November 2026 with reduced repetitions: 99 for the known-date bootstrap, the restricted-variant bootstrap and the yearly-block standard errors; 40 for the sup-LR bootstrap, with 5 starts per fit instead of 20 (the observed sup-LR scan was rerun with 5 starts so that observed and simulated values are comparable). Only $L=480$ was run; the planned $L=360$ and $L=600$ checks are outstanding. $p$-values from 99 or 40 simulations have resolution of about 0.01 or 0.025.
+
+\subsection{Methods as run}
+\begin{enumerate}
+\item \textbf{Sliding window.} Window length $L=480$ months, moved in 12-month steps: 60 positions, window starts January 1927 to January 1986. In each window the model is fitted on the first 240 months and the walk-forward test (frozen parameters, and refit every month) is run on the last 240, with the counted transition matrix as benchmark.
+\item \textbf{Known-date break at October 1976} (the main split): $\text{LR}=2(\ell_{\text{before}}+\ell_{\text{after}}-\ell_{\text{full}})$, compared with $\chi^2_{12}$ and with a parametric bootstrap that simulates 1{,}197 months from the full-sample fit (no break by construction) and refits all three models; plus the \citet{anderson1957} homogeneity test on the observed top-factor transitions (6 degrees of freedom).
+\item \textbf{Which part changed.} Two restricted fits at October 1976 and at the sup-LR date: $B$ shared with $A$ free, and $A$ shared with $B$ free, each against the unrestricted model (6 degrees of freedom), with a custom Baum--Welch step that pools the shared matrix across the two segments; parametric-bootstrap $p$-values at October 1976.
+\item \textbf{Unknown break date (sup-LR).} $\text{LR}(\tau)$ at every January 1942--2011 (70 dates, 15\% trimming); bootstrap distribution of $\sup_\tau \text{LR}(\tau)$ from simulated no-break sequences, each rescanned over all 70 dates \citep{andrews1993,hansen2000}.
+\item \textbf{Entry by entry.} $z$-statistics for each entry of $A$ and $B$ before versus after October 1976, with standard errors from a calendar-year block bootstrap run separately within each segment (cold-start refits).
+\end{enumerate}
+
+\subsection{Results: sliding window}
+\begin{center}
+\small
+\begin{tabular}{lccc}
+\toprule
+ & $a_{\textsc{smb},\textsc{smb}}$ & $a_{\textsc{hml},\textsc{hml}}$ & $a_{\textsc{mom},\textsc{mom}}$ \\
+\midrule
+Main monthly fit (training 1927--1976) & 0.864 & 0.899 & 0.857 \\
+Median, windows starting 1927--1955 (29 windows) & 0.921 & 0.941 & 0.972 \\
+Median, windows starting 1956--1986 (31 windows) & 0.570 & 0.720 & 0.717 \\
+Spearman correlation with window start year (all 60) & $-0.74$ & $-0.70$ & $-0.65$ \\
+Same, 45 windows where the names hold & $-0.76$ & $-0.71$ & $-0.73$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+The soft names hold in 45 of 60 windows (75\%): 83\% of windows starting 1927--1955 and 68\% of those starting 1956--1986. The own-factor emission probabilities rise with start year (Spearman $+0.26$ to $+0.48$), the mirror image of the falling diagonals.
+
+\begin{center}
+\small
+\begin{tabular}{lcc}
+\toprule
+Walk-forward on each window's test half (60 windows) & Frozen & Refit monthly \\
+\midrule
+Mean hit rate, HMM & 42.1\% & 42.6\% \\
+Mean hit rate, counted transition matrix & 43.7\% & 43.7\% \\
+Windows where the HMM's hit rate is below the counted matrix's & 67\% & 73\% \\
+Mean log-score difference, HMM $-$ counted matrix & $-0.020$ & $-0.015$ \\
+Windows where that difference is negative & 85\% & 88\% \\
+Mean Sharpe difference, HMM tilt $-$ equal weight & $+0.002$ & $+0.007$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Results: break tests}
+\begin{center}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccc}
+\toprule
+Test & Statistic & $\chi^2$ $p$ & Bootstrap $p$ \\
+\midrule
+Known date, October 1976 (12 df) & LR $=12.91$ & 0.38 & 0.42 (99 sims) \\
+Observable chain, October 1976 (6 df) & $\chi^2=3.79$ & 0.70 & --- \\
+$B$ shared, $A$ free, October 1976 (6 df) & LR $=3.84$ & 0.70 & 0.71 (99 sims) \\
+$A$ shared, $B$ free, October 1976 (6 df) & LR $=6.97$ & 0.32 & 0.28 (99 sims) \\
+$B$ shared, $A$ free, January 1975 (6 df) & LR $=5.41$ & 0.49 & --- \\
+$A$ shared, $B$ free, January 1975 (6 df) & LR $=8.43$ & 0.21 & --- \\
+Unknown date, sup over January 1942--2011 & $\sup$ LR $=17.71$, January 1975 & --- & 0.68 (40 sims, 5 starts) \\
+\bottomrule
+\end{tabular}}
+\end{center}
+\noindent Known-date log-likelihoods: full sample $-1{,}270.33$, before $-620.93$, after $-642.95$. Under no break the simulated LR has median 12.39 and 95th percentile 19.37; the simulated sup-LR has median 19.98 and 95th percentile 27.95. With 20 starts the observed sup-LR is 16.67, also at January 1975.
+
+\noindent Segment fits at October 1976 (diagonals, labels aligned to the main fit):
+\begin{center}
+\small
+\begin{tabular}{lcc}
+\toprule
+ & Diagonal of $A$ (\SMB, \HML, \MOM) & Diagonal of $B$ \\
+\midrule
+Before (1927--1976) & 0.864, 0.899, 0.857 & 0.398, 0.472, 0.670 \\
+After (1976--2026) & 0.485, 0.790, 0.959 & 0.998, 0.149, 0.401 \\
+Full sample & 0.748, 0.796, 0.841 & 0.426, 0.497, 0.705 \\
+\bottomrule
+\end{tabular}
+\end{center}
+The post-1976 fit fails the name check (its ``\HML'' state emits \HML{} only 15\% of the time). In the calendar-year block bootstrap the names hold in 43\% of draws before 1976 and 11\% after. Entry by entry, 1 of 18 entries differs at $|z|>1.96$ ($b_{\textsc{smb}}(\textsc{mom})$, $z=2.21$), against 0.9 expected by chance; because the names fail after 1976 these comparisons are of states that are not the same thing and are shown for reference only.
+
+\subsection{Interpretation}
+\begin{itemize}
+\item \textbf{No formal test rejects homogeneity.} Neither the break at the main split nor the strongest break found anywhere in 1942--2011 is significant, for the hidden model or for the observed chain, and neither restricted variant points to a change in $A$ alone or in $B$ alone.
+\item \textbf{But the tests have little power here.} Under no break the LR statistic is already about 12 on average, and the post-1976 fit can look very different from the pre-1976 fit (persistence of the \SMB{} state 0.49 vs 0.86; names failing) while staying inside the no-break range. This is the weak identification of Section~\ref{sec:bootnull} again. A non-rejection is therefore weak evidence of stability (as anticipated in Item~2).
+\item \textbf{The sliding window shows systematic drift.} Persistence falls steadily with window start date: windows starting before 1956 have diagonals around 0.92--0.97, later ones around 0.57--0.72, and the names fail more often in later windows. The overlapping windows are strongly dependent, so the Spearman correlations are descriptive, not tests; but the decline is gradual, with noise around the trend, rather than a single step, which a single-break test is not designed to detect. The most consistent reading is that leadership regimes became less persistent over time, gradually rather than at one date.
+\item \textbf{The forecasting result does not depend on the split.} In most windows the HMM does not beat the counted transition matrix on hit rate or log score, and the probability tilt does not beat equal weight. The null forecasting result of the main specification is therefore not specific to the 1976 split.
+\item \textbf{For the paper.} State that time homogeneity is not rejected by formal tests but is not well supported either: the clean, persistent states are mainly a feature of the first half of the sample, and the fitted $A$ should be read as an average over a period in which persistence appears to have declined.
+\end{itemize}
+
+\subsection{Outputs and reproduction}
+Outputs: \texttt{results/time\_homogeneity\_prelim/} (one CSV or JSON per test, both scripts' \texttt{--report} output, and figures of the diagonals of $A$ and $B$ by window start, walk-forward results by window, and LR against break date). From the repository root:
+{\footnotesize
+\begin{verbatim}
+python code/analysis/homog_test.py  --dir OUT --observed
+python code/analysis/homog_test.py  --dir OUT --sliding
+python code/analysis/homog_test.py  --dir OUT --known --reps 99
+python code/analysis/homog_extra.py --dir OUT --slide
+python code/analysis/homog_extra.py --dir OUT --sup-obs
+python code/analysis/homog_extra.py --dir OUT --sup-obs --restarts 5 \
+       --out OUT/homog_sup_obs_r5.csv
+python code/analysis/homog_extra.py --dir OUT --variants
+python code/analysis/homog_extra.py --dir OUT --variants-boot --reps 99
+python code/analysis/homog_extra.py --dir OUT --zscores --reps 99
+python code/analysis/homog_extra.py --dir OUT --sup-boot --restarts 5 --reps 40 \
+       --out OUT/homog_sup_boot_r5.csv
+python code/analysis/homog_extra.py --dir OUT --plots
+python code/analysis/homog_extra.py --dir OUT --report
+\end{verbatim}
+}
+Seeds are the script defaults (9348). Next steps: full repetitions (199 or more, 20 starts for the sup-LR bootstrap), window lengths $L=360$ and $L=600$, and fixing the overlapping title and legend in \texttt{slide\_diag\_A.png}.
+
+%==========================================================================
 \section{Conclusions}
 \begin{enumerate}
 \item \textbf{Regimes exist descriptively.} Monthly leadership states are persistent (7--10 months), interpretable through lift and state-conditional returns, stable across restarts and refits, and line up with known episodes.
 \item \textbf{But persistence is weakly identified.} The bootstrap intervals for the diagonals of $A$ run from about 0.35--0.5 to 0.98, no factor-to-factor transition is distinguishable from zero, and full refits keep the state names in only 56--75\% of resamples. The no-memory null test finds real but weak dependence and shows that a high fitted diagonal on its own is not evidence of persistence (Section~\ref{sec:bootnull}).
+\item \textbf{And it appears to have weakened over time.} No formal break test rejects time homogeneity, but the tests have little power; a sliding window shows persistence falling steadily from windows starting before 1956 to later ones, and the HMM fails to beat the counted transition matrix across windows as well as at the main split (Section~\ref{sec:homog}).
 \item \textbf{No predictive gain.} Out of sample the HMM matches but does not beat the raw transition matrix or ``always the most frequent factor'' on hit rate or log score, weekly or monthly. In-sample BIC agrees: the hidden layer does not pay for its parameters.
 \item \textbf{No risk-adjusted return gain.} No rule beats equal weight on Sharpe; the HMM probability tilt comes closest (+0.02 gross, $<0.01$ net).
 \item \textbf{Design-document prediction rule should be replaced.} Predicting the most likely state is clearly worse (32--36\% hit rate) than predicting the most likely top factor via $B$.
