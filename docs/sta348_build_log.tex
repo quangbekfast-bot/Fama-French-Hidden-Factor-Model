@@ -915,7 +915,7 @@ Item 4 gives the yardstick for Items 2 and 3: variation across windows or starts
 
 Yury implemented part of TA Item~4 together with a test that Item~4 did not ask for: whether the training sequence shows any memory at all. The scripts are \texttt{param\_boot.py}, \texttt{null\_test.py} and \texttt{null\_extra.py} in \texttt{code/analysis/}, pushed on 14 November 2026 to the branch \texttt{bootstrap\_null\_tests} (not yet merged into \texttt{main}). All runs use the monthly main specification (Section~\ref{sec:monthly}) and its training window only (598 months, January 1927 -- October 1976); the test window is not touched.
 
-\textbf{Status: preliminary.} The scripts default to 1{,}000 repetitions. The numbers below come from 200 repetitions of each bootstrap and 190 of 200 null simulations (the null run hit a time limit; none failed). Each repetition repeats the full 20-start fit, about 2.5 seconds on two cores, so a full run takes roughly 40 minutes per scheme. Medians and interval endpoints will move somewhat at 1{,}000 repetitions; the endpoints are the least precise.
+\textbf{Status: preliminary.} The scripts default to 1{,}000 repetitions. The numbers below come from 200 repetitions of each bootstrap and 200 null simulations. Each repetition repeats the full 20-start fit, about 2.5 seconds on two cores, so a full run takes roughly 40 minutes per scheme. Medians and interval endpoints will move somewhat at 1{,}000 repetitions; the endpoints are the least precise.
 
 \subsection{Method: bootstrap of $A$ and $B$}
 Each repetition builds a pseudo-training sequence of 598 monthly top-factor labels, refits the model to it, and records the refitted parameters. Two schemes generate the pseudo-sequences.
@@ -983,24 +983,24 @@ Refits needing no relabelling & --- & \multicolumn{2}{c}{84.5\%} & \multicolumn{
 \item Record label-free statistics: log-likelihood gains over the no-memory model; the HMM diagonals ranked from largest to smallest and the implied durations; and the second-largest eigenvalue modulus $|\lambda_2|$ of each fitted transition matrix (zero for a memoryless chain, larger with more memory).
 \item Repeat, then compute the same statistics on the real training sequence.
 \end{enumerate}
-\textbf{Monte Carlo $p$-value} \citep{davison1997}: the share of simulated sequences whose statistic is at least the real value, $p=\#\{\text{null}\ge\text{real}\}/190$ (one-sided; resolution about $1/190$; a count of zero is reported as $p<0.01$, equivalently $(0+1)/(190+1)\approx0.005$).
+\textbf{Monte Carlo $p$-value} \citep{davison1997}: the share of simulated sequences whose statistic is at least the real value, $p=\#\{\text{null}\ge\text{real}\}/200$ (one-sided; resolution $1/200$; a count of zero is reported as $p<0.01$, equivalently $(0+1)/(200+1)\approx0.005$).
 
 \subsection{Results: null test}
 \begin{center}
 \small
 \begin{tabular}{l c ccc c}
 \toprule
- & & \multicolumn{3}{c}{Null, 190 no-memory sequences} & \\
+ & & \multicolumn{3}{c}{Null, 200 no-memory sequences} & \\
 \cmidrule(lr){3-5}
 Statistic & Real & Median & 95th pct. & \# $\ge$ real & $p$ \\
 \midrule
-HMM log-likelihood gain over no memory & 12.68 & 3.15 & 6.99 & 0 & $<0.01$ \\
-Markov-chain gain over no memory & 4.49 & 1.69 & 3.78 & 6 & 0.03 \\
+HMM log-likelihood gain over no memory & 12.68 & 3.21 & 7.36 & 0 & $<0.01$ \\
+Markov-chain gain over no memory & 4.49 & 1.72 & 3.97 & 7 & 0.04 \\
 $|\lambda_2|$, Markov chain on labels & 0.117 & 0.049 & 0.097 & 3 & 0.02 \\
-$|\lambda_2|$, HMM transition matrix & 0.849 & 0.640 & 0.960 & 56 & 0.30 \\
-Largest HMM diagonal & 0.899 & 0.896 & 0.997 & 94 & 0.49 \\
-Smallest HMM diagonal & 0.857 & 0.488 & 0.872 & 12 & 0.06 \\
-Duration of stickiest state (months) & 9.9 & 9.6 & 306 & 94 & 0.49 \\
+$|\lambda_2|$, HMM transition matrix & 0.849 & 0.609 & 0.957 & 57 & 0.29 \\
+Largest HMM diagonal & 0.899 & 0.894 & 0.997 & 97 & 0.49 \\
+Smallest HMM diagonal & 0.857 & 0.472 & 0.883 & 13 & 0.07 \\
+Duration of stickiest state (months) & 9.9 & 9.4 & 306 & 97 & 0.49 \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -1008,9 +1008,9 @@ Duration of stickiest state (months) & 9.9 & 9.6 & 306 & 94 & 0.49 \\
 
 \textbf{Reading.}
 \begin{itemize}
-\item \textbf{The real sequence is not memoryless.} The HMM's likelihood gain beats all 190 null sequences, and the plain Markov chain's gain and $|\lambda_2|$ are also above the 95th null percentile. There is some dependence in which factor tops next month.
+\item \textbf{The real sequence is not memoryless.} The HMM's likelihood gain beats all 200 null sequences, and the plain Markov chain's gain and $|\lambda_2|$ are also above the 95th null percentile. There is some dependence in which factor tops next month.
 \item \textbf{One sticky state is not evidence of persistence.} Fitted to sequences with no memory, the HMM still produces a largest diagonal around 0.90 and a stickiest-state duration around 10 months. The real values sit at the null median ($p\approx0.5$), so the headline durations cannot by themselves be read as persistence.
-\item \textbf{Three sticky states is mildly unusual.} Null fits typically have only one or two sticky states (median smallest diagonal 0.49); only 10\% of them have all three diagonals at or above 0.8. The real fit's smallest diagonal of 0.857 gives $p=0.06$: suggestive, not significant.
+\item \textbf{Three sticky states is mildly unusual.} Null fits typically have only one or two sticky states (median smallest diagonal 0.47); only 10\% of them have all three diagonals at or above 0.8. The real fit's smallest diagonal of 0.857 gives $p=0.07$: suggestive, not significant.
 \item \textbf{Consistent with BIC and the forecasting results.} The gain of 12.7 log-likelihood units uses 10 extra parameters; the BIC penalty for those is $5\ln 598\approx 32$, so BIC still prefers no memory (Section~\ref{sec:monthly}). The dependence is detectable but small, which matches the absence of out-of-sample forecasting gains.
 \item \textbf{Not yet tested: does the hidden layer beat a plain Markov chain?} The HMM's gain over the Markov chain cannot be judged against a memoryless null. \texttt{null\_extra.py --null-markov} simulates from the fitted Markov chain instead and is the right test; it has not been run.
 \end{itemize}
