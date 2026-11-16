@@ -1,0 +1,102 @@
+MAIN SPECIFICATION (test window Nov 1976 - Sep 2026, refit monthly): hit 0.422, hit_mle 0.419, logp_diff -0.006, sharpe_hmm_tilt 0.625, sharpe_equal_weight 0.604, sharpe_diff_tilt_ew 0.021
+
+=== SLIDING WINDOW L=480: 60 positions, training half 240 months ===
+names kept in 75.0% of positions
+positions where the names fail (counted separately, left out of the parameter table): 15, window start years [1930, 1932, 1933, 1944, 1945, 1956, 1957, 1963, 1967, 1968, 1977, 1981, 1982, 1983, 1985]
+parameters over the 45 positions with the names kept:
+                     mean              std    min               max  spearman_vs_start  boot_sd  boot_p2.5  boot_p97.5  share_inside_boot_95
+A_SMB_SMB           0.752            0.223  0.262             0.992             -0.763    0.146      0.420       0.979                 0.778
+A_SMB_HML           0.099            0.153  0.000             0.456              0.269    0.088      0.000       0.319                 0.689
+A_SMB_MOM           0.148            0.172  0.000             0.612              0.400    0.113      0.000       0.419                 0.800
+A_HML_SMB           0.134            0.110  0.000             0.459              0.394    0.106      0.000       0.417                 0.889
+A_HML_HML           0.810            0.144  0.435             0.980             -0.706    0.141      0.505       0.979                 0.956
+A_HML_MOM           0.056            0.132  0.000             0.565              0.242    0.083      0.000       0.278                 0.778
+A_MOM_SMB           0.052            0.101  0.000             0.367              0.630    0.094      0.000       0.325                 0.933
+A_MOM_HML           0.120            0.148  0.000             0.684              0.473    0.094      0.000       0.374                 0.844
+A_MOM_MOM           0.828            0.183  0.314             1.000             -0.728    0.121      0.497       0.971                 0.644
+B_SMB_SMB           0.607            0.221  0.350             1.000              0.629    0.151      0.282       0.939                 0.844
+B_SMB_HML           0.120            0.112  0.000             0.298             -0.421    0.080      0.000       0.254                 0.778
+B_SMB_MOM           0.273            0.187  0.000             0.576             -0.646    0.141      0.000       0.649                 0.778
+B_HML_SMB           0.089            0.105  0.000             0.293             -0.409    0.094      0.017       0.384                 0.467
+B_HML_HML           0.624            0.158  0.362             0.982              0.358    0.138      0.319       0.822                 0.889
+B_HML_MOM           0.288            0.103  0.000             0.494             -0.037    0.120      0.000       0.465                 0.956
+B_MOM_SMB           0.141            0.104  0.000             0.391             -0.387    0.065      0.000       0.241                 0.822
+B_MOM_HML           0.148            0.119  0.000             0.339             -0.721    0.125      0.000       0.535                 0.822
+B_MOM_MOM           0.711            0.179  0.498             1.000              0.660    0.125      0.439       0.964                 0.756
+dur_SMB            13.575           23.512  1.356           117.954             -0.763   13.189      1.724      46.747                 0.778
+dur_HML            12.574           13.249  1.770            48.972             -0.706   17.775      2.020      46.946                 0.956
+dur_MOM   67338036473.074 252125496761.618  1.458 1000022122209.503             -0.728    8.201      1.987      34.407                 0.644
+stat_SMB            0.234            0.180 -0.000             0.601              0.056    0.151      0.095       0.711                 0.711
+stat_HML            0.316            0.241 -0.000             0.861              0.311    0.153      0.116       0.662                 0.689
+stat_MOM            0.450            0.304  0.000             1.000             -0.275    0.132      0.057       0.642                 0.711
+(boot_* columns: Item-4 parametric bootstrap of the 598-month training fit. Window fits use only 240 months, so their sampling error is larger than the bootstrap's; a low 'share_inside' therefore points to drift only if it is far below what that extra noise explains.)
+
+Walk-forward on each window's test half, frozen parameters (60 windows; mean/percentiles over all windows, last column over the names-kept windows only)
+                      mean   p2.5  p97.5  main_spec  mean_names_kept_only
+hit                  0.421  0.354  0.469      0.422                 0.422
+hit_state            0.355  0.252  0.461        NaN                 0.359
+hit_mle              0.437  0.385  0.492      0.419                 0.441
+logp_hmm            -1.096 -1.143 -1.048        NaN                -1.092
+logp_mle            -1.076 -1.106 -1.047        NaN                -1.073
+logp_diff           -0.020 -0.066  0.003     -0.006                -0.019
+sharpe_hmm_tilt      0.926  0.052  1.389      0.625                 0.957
+sharpe_hmm_top       0.710  0.020  1.163        NaN                 0.735
+sharpe_hmm_expected  0.629  0.030  0.919        NaN                 0.667
+sharpe_equal_weight  0.924  0.022  1.372      0.604                 0.955
+sharpe_diff_tilt_ew  0.002 -0.143  0.083      0.021                 0.001
+t_tilt_vs_ew         1.767  0.002  2.760        NaN                 1.833
+
+Walk-forward on each window's test half, refit parameters (60 windows; mean/percentiles over all windows, last column over the names-kept windows only)
+                      mean   p2.5  p97.5  main_spec  mean_names_kept_only
+hit                  0.426  0.375  0.502      0.422                 0.427
+hit_state            0.358  0.258  0.456        NaN                 0.360
+hit_mle              0.437  0.385  0.492      0.419                 0.441
+logp_hmm            -1.091 -1.159 -1.045        NaN                -1.090
+logp_mle            -1.076 -1.106 -1.047        NaN                -1.073
+logp_diff           -0.015 -0.071  0.004     -0.006                -0.016
+sharpe_hmm_tilt      0.930  0.039  1.382      0.625                 0.962
+sharpe_hmm_top       0.718  0.015  1.126        NaN                 0.745
+sharpe_hmm_expected  0.638 -0.028  0.968        NaN                 0.675
+sharpe_equal_weight  0.924  0.022  1.372      0.604                 0.955
+sharpe_diff_tilt_ew  0.007 -0.111  0.106      0.021                 0.006
+t_tilt_vs_ew         1.749 -0.293  3.074        NaN                 1.827
+
+=== WHICH PART CHANGED (restricted variants vs unrestricted, 6 df) ===
+tau index 598 (main split, after Oct 1976), restarts 20, ll unrestricted -1263.88
+  B_shared_A_free  LR 3.84  chi2(6) p 0.699  bootstrap p 0.707 (99 sims; null 95th 9.47)
+  A_shared_B_free  LR 6.97  chi2(6) p 0.323  bootstrap p 0.283 (99 sims; null 95th 10.16)
+  B_shared_A_free: diag of A before [0.856, 0.891, 0.858] after [0.722, 0.743, 0.143] | diag of B before [0.414, 0.482, 0.679] after [0.414, 0.482, 0.679]
+  A_shared_B_free: diag of A before [0.902, 0.618, 0.779] after [0.902, 0.618, 0.779] | diag of B before [0.358, 0.718, 0.729] after [0.275, 0.666, 0.422]
+tau index 576 (January 1975 (sup-LR date)), restarts 20, ll unrestricted -1262.00
+  B_shared_A_free  LR 5.41  chi2(6) p 0.493
+  A_shared_B_free  LR 8.43  chi2(6) p 0.208
+
+=== ENTRY BY ENTRY: before vs after Oct 1976 (SE from the yearly bootstrap within each segment) ===
+segment before: names check on the point fit: passes; 99 bootstrap draws, names kept in 43.4%
+segment after: names check on the point fit: FAILS; 99 bootstrap draws, names kept in 11.1%
+WARNING: names fail in at least one segment, so the state structure itself changed (build-log caveat). Report that; the entry-by-entry z below compares states that are not the same thing and is shown for reference only.
+(standard errors: standard deviation over all bootstrap draws in the segment, as in Item 4)
+    entry  before  after  se_before  se_after      z
+A_SMB_SMB   0.864  0.485      0.130     0.221  1.478
+A_SMB_HML   0.067  0.002      0.064     0.160  0.378
+A_SMB_MOM   0.069  0.513      0.124     0.235 -1.672
+A_HML_SMB   0.101  0.210      0.152     0.223 -0.403
+A_HML_HML   0.899  0.790      0.156     0.220  0.403
+A_HML_MOM   0.000  0.000      0.100     0.162  0.000
+A_MOM_SMB   0.092  0.000      0.114     0.144  0.500
+A_MOM_HML   0.051  0.041      0.107     0.175  0.052
+A_MOM_MOM   0.857  0.959      0.137     0.175 -0.461
+B_SMB_SMB   0.398  0.998      0.131     0.282 -1.924
+B_SMB_HML   0.107  0.000      0.109     0.259  0.382
+B_SMB_MOM   0.494  0.003      0.114     0.191  2.213
+B_HML_SMB   0.208  0.172      0.214     0.137  0.143
+B_HML_HML   0.472  0.149      0.217     0.205  1.080
+B_HML_MOM   0.320  0.679      0.139     0.233 -1.322
+B_MOM_SMB   0.000  0.243      0.121     0.120 -1.426
+B_MOM_HML   0.330  0.356      0.171     0.218 -0.095
+B_MOM_MOM   0.670  0.401      0.123     0.183  1.224
+1 of 18 entries have |z| > 1.96 (0.9 expected by chance if nothing changed; entries are not independent)
+
+=== SUP-LR BOOTSTRAP (restarts-reduced run_r5) ===
+observed: 70 dates, max LR 17.71 at January 1975
+bootstrap: 40 sims; p = 0.675; null sup-LR median 19.98, 95th 27.95
