@@ -1,0 +1,29 @@
+{
+  "clean": "data/clean/sta348_factor_data_monthly.csv",
+  "out": "results/monthly_returns_drift",
+  "wf": "results/monthly_main/walk_forward.csv",
+  "costs": [
+    0,
+    5,
+    10,
+    25,
+    50,
+    100
+  ],
+  "drift": true,
+  "entry_cost": true,
+  "train_frac": 0.5,
+  "pi": "uniform",
+  "restarts": 20,
+  "jitter": 0.2,
+  "init_stay": 0.8,
+  "init_boost": 2.0,
+  "refit_every": 1,
+  "n_iter": 500,
+  "tol": 1e-06,
+  "smoothing": 0.5,
+  "seed": 348,
+  "test_months": 599,
+  "test_start": "1976-11-30",
+  "test_end": "2026-09-30"
+}
