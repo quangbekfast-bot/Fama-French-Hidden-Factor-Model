@@ -1,0 +1,629 @@
+---
+title: "Hidden Markov Model Approach to Leading US Equity Market Risk Premium Factor Prediction"
+author: "Richard Pham, Yury Pyshkin, Gor Ashotyan"
+date: "`r Sys.Date()`" #  
+abstract: "To be written."
+output:
+  pdf_document:
+      number_sections: true
+spacing: double
+bibliography: docs/sta348_references.bib
+link-citations: true
+header-includes:
+- \usepackage{fancyhdr}
+- \usepackage{booktabs}
+- \usepackage{graphicx}
+- \usepackage{float}
+- \usepackage{xcolor}
+- \pagestyle{fancy}
+- \fancyhead[L]{HMM Factor Leadership Prediction}
+- \fancyfoot[C]{}
+- \fancyfoot[R]{\thepage}
+- \usepackage{setspace}
+- \doublespacing
+- \usepackage{etoolbox}
+- \appto{\normalsize}{\setlength{\abovedisplayskip}{4pt}\setlength{\belowdisplayskip}{4pt}\setlength{\abovedisplayshortskip}{2pt}\setlength{\belowdisplayshortskip}{2pt}}
+---
+
+```{=tex}
+\newpage 
+\tableofcontents 
+\newpage
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+\newpage 
+
+# Introduction
+
+Factor models have been at the forefront of financial economics since the Capital Asset Pricing Model (CAPM) [@sharpe1964; @lintner1965] explained a stock's expected excess return through its correlation with the market risk premium. The CAPM implies that no asset should earn a persistent return beyond this prediction, yet realized returns deviate from it systematically. Efforts to explain these deviations produced the Fama--French three-factor [@fama1993], Carhart four-factor [@carhart1997] and Fama--French five-factor [@fama2015] models, which established size, value and momentum, etc as priced risk factors.
+
+By 2009, @ang2009nbim found that approximately 70% of the active returns of Norway's Government Pension Fund Global could be explained by exposure to systematic factors. This laid a foundation for factor investing: the deliberate allocation to factors that have historically delivered superior risk-adjusted returns [@robeco_factor]. Factor products range from passive smart beta indices to discretionary factor tilting, but all face the same question. Can we predict which factor will lead the market next and how long its leadership will last, and can an active tilting strategy exploit that prediction?
+
+This paper proposes a factor-regime prediction model for the US equity market based on a hidden Markov model (HMM). We validate it out of sample through walk-forward testing against naive benchmark predictors and build rule-based weekly and monthly trading strategies on its forecasts.
+
+Section 2 reviews the literature on hidden Markov regime classifiers. Appendix \ref{app-prelim} defines the Carhart four-factor model, hidden Markov models and our validation terminology. \textcolor{blue}{Section 3 presents the model and method: data processing, training, validation and the strategy overlay. Section 4 presents the results and their interpretation. Section 5 concludes} with the model's limitations and future improvements.
+
+# Literature Review
+
+If we view leading factors as a form of market regime, a common prediction approach is through the use of the hidden Markov model (HMM). We believe a hidden-state approach is appropriate here, since all available factor return data are portfolio-based proxies [@fama1993; @french_library]. The use of the hidden Markov model in classifying market regimes and driving asset allocation decisions has been extensive in the academic literature.
+
+@yuan2016 fitted 2-, 3- and 4-state hidden Markov models to daily FTSE 100 and Euro Stoxx 50 returns from 2011 to 2016, with BIC favouring their 2-state bull and bear model (AIC favoured 4 states), and the authors concluding that an HMM is better at capturing the fat tails and volatility clustering of returns than a random walk model. Closer to our data, @wang2020 proposed a 3-state HMM on the daily returns and volatility of an S&P 500 ETF, with the three states labelled bull, bear and sideways. They backtested several factor strategies from 2007 to 2017, tested which strategies performed best in which states, then implemented a strategy-switching algorithm for the validation stage. Over the 2.5-year test window, the model achieved a Sharpe ratio of 2.02 with use of leverage, which gives a suggestive baseline for HMM applications in strategy construction.
+
+Closer to our model goal, we look for precedents in fitting HMMs on factor return series. @fons2021 fitted a 2-state multivariate Gaussian HMM on vectors of daily factor returns, with a feature saliency variant that selects informative factors on regime. Their dataset consists of 25 long-short style factors constructed from S&P 500 constituents from 1988 to 2016, as well as 6 MSCI USA style index returns from 1999 to 2016 for allocation testing. The paper found that the best portfolio performance is achieved with a 2-state "bad"/"good" model, but the best (lowest) BIC score is achieved with a 4-state model. In an MPRA working paper, @ibanez2024 took a similar training data approach, fitting a multivariate Gaussian HMM on the weekly Fama--French five factors, and showed that a 4-state HMM yields the best combined AIC and BIC. Their HMM outputs each regime's factor returns, which are used to forecast individual stock returns through their respective factor exposures.
+
+Three observation can be drawn from previous literatures. First, we observe that the majority of the HMM literature on market regime prediction uses a macroeconomic-cycle encoding for the states instead of a "leading factor" interpretation. Second, as states are interpreted as macroeconomics regimes, we cannot infer out how long a factor leadship can persist, and which factor can lead the market next which limits the amount of insights factor investors can get. Finally, we notice that the majority of validation stages for regime models are based entirely on backtested portfolio returns, often over a short testing window, rather than on testing whether the model's regime forecasts beat naive predictors.
+
+A warm introduction to the Carhart four-factor model, the hidden Markov model and its related questions can be found in Appendix \ref{app-prelim}. Our paper focuses mainly on resolving Problem 3 of the hidden Markov model, and on developing a prediction method for the next top factor as well as an investment strategy overlay to validate the prediction model.
+
+# Model and Method
+
+From the HMM definition in Appendix \ref{app-hmm}, we specify our categorical hidden Markov model as follows:
+
+1. $N = 3$: there are three hidden states in the model, corresponding to the three factors. The hidden state set is $S = \{S_{\text{SMB}}, S_{\text{HML}}, S_{\text{MOM}}\}$. The interpretation of these states is that if $q_t = S_k$, factor $k$ is favoured by the market at time $t$.
+
+2. $A$ = the one-step transition matrix between favoured factors, where
+   $$a_{ij} = P(q_{t+1} = S_j \mid q_t = S_i), \qquad i, j \in \{\text{SMB}, \text{HML}, \text{MOM}\},$$
+   is the probability that factor $j$ is favoured next period given that factor $i$ is favoured this period. In our base case, we assume the hidden Markov chain to be time-homogeneous, meaning that the transition probabilities do not depend on time:
+   $$P(q_{t+1} = S_j \mid q_t = S_i) = a_{ij} \quad \text{for all } t.$$
+   We test this assumption and discuss the results in the validation section.
+
+3. $O_t$ = the factor in the data that has the highest return in period $t$. The observation symbols are therefore $V = \{\text{SMB}, \text{HML}, \text{MOM}\}$, so $M = 3$.
+
+4. $B$ = the emission matrix, with
+   $$b_j(k) = P(O_t = k \mid q_t = S_j), \qquad j, k \in \{\text{SMB}, \text{HML}, \text{MOM}\},$$
+   which, like $A$, is assumed not to depend on $t$. The interpretation of $b_j(k)$ is the probability of seeing factor $k$ top the market in the data, given that the true favoured factor is $j$.
+
+5. $\pi$ = the initial state distribution, $\pi_j = P(q_1 = S_j)$. We discuss how $\pi$ is set in the model training section.
+
+The model parameters are therefore $\lambda = (A, B, \pi)$.
+
+## Data Processing
+
+For model training, we rely on factor return data from the Kenneth R. French Data Library [@french_library], which is built from the CRSP database. The factor returns are reported as percentages at monthly, weekly and daily frequencies; we convert them to decimals. The construction methodology of each factor and its interpretation can be found in Appendix \ref{app-factor}. \textcolor{blue}{Dataset construction, including the weekly momentum series, and the encoding of each period's top factor are detailed in Appendix \ref{app-m-data}.}
+
+
+## Model Training
+
+### Initialization Step
+
+To initialize the training process of the model, we must assume an initial $A$, $B$ and $\pi$. \textcolor{blue}{The two versions of $\pi$ we use, the exact starting matrices $A^{(0)}$ and $B^{(0)}$, and the randomization of the restarts are given in Appendix \ref{app-m-train}.}
+
+For the transition matrix $A^{(0)}$, we hypothesize that states are persistent and symmetric across both weekly and monthly time frames; as such, the probability of a state transitioning to itself will be significantly higher. Several academic studies have shown this is the case: @chen2004 showed that investment styles that did best recently continue their outperformance; @barberis2003 posit the theory that investors move money towards recent investment style winners, which implies that a style's outperformance persists in the short run before eventually reversing; and @ehsani2022 showed that most factors' returns are positively autocorrelated, in that they tend to earn more after a good year than after a bad year. We will stress test this hypothesis through randomization of $A$ under both persistent (Section \ref{sec-restarts}) and non-persistent (Section \ref{sec-robust}, Robustness Check) assumptions and test for predictive capabilities.
+
+For the emission matrix $B^{(0)}$, we built this from data with a small soft naming rule applied: the diagonals are scaled by 2 and the off-diagonals rescaled proportionally to conform with the rules of a probability matrix. As our observation set is essentially identical to the hidden state set, the assumption on the diagonals is to impose a high probability of seeing a factor's return top when it is that factor's regime in the hidden model. We will proceed to check this assumption using a lift score within the randomized draws specified below.
+
+### Restarts and Lift Check {#sec-restarts}
+
+As $A^{(0)}$ and $B^{(0)}$ are assumed, we proceed to generate 19 different copies using the Dirichlet randomization function in Python. The randomization will only generate jittered copies, as the persistent diagonal structure remains. With 20 different runs, we report the run with the highest log-likelihood and report the spread of results across the 20 different copies; the result of this validation test will be reported in the output discussion section.
+
+As we name the hidden states beforehand and these hidden states are essentially the emissions themselves, we must check whether or not the names hold up after training. We define a lift score, on which state $j$ can keep its name if $L_{jj} > 1$ and $L_{jj}$ is the largest entry in row $j$; in other words, if factor $j$ can be seen to top more often when state $j$ holds. This is a check against our initial assumption on $B$ after running the forward and backward algorithms. A lift matrix will be computed after each validation test, and we report the proportion of runs where the names are kept. Entry $jk$ of the lift matrix is: $L_{jk} = \hat b_j(k) / \hat p_k$.
+
+## Validation Framework
+
+### Data Split and Walk-forward Testing
+
+In both our weekly and monthly datasets, we employ a 50/50 chronological train-test split, where training occurs in the first half and walk-forward testing in the second half. Our walk-forward procedure goes as follows: for each testing period $t$, we forecast the next observation $O_t$ from the model fitted on $O_{1:t-1}$, choosing the factor with the largest predicted probability computed from the forward algorithm. Our model then observes $O_t$, records whether the forecast was correct or not, and then refits the model using observations $O_{1:t}$.
+
+### Prediction Rule
+
+In our validation step, we want to forecast the most probable observation at time $t$ given the previous observations up to time $t-1$, namely $P(O_t = k \mid O_{1:t-1})$. To do so, we rely on the forward algorithm as well as our trained transition matrix $A$ and emission matrix $B$. Here we use $\hat\alpha$ to avoid underflow in Python. Detailed derivation of our prediction probability can be found in Appendix \ref{app-pred}.
+$$\scalebox{0.94}{$\displaystyle P(O_t = k \mid O_{1:t-1}) = \sum_{j=1}^{N} \Big[\sum_{i=1}^{N} \hat\alpha_{t-1}(i)\, a_{ij}\Big]\, b_j(k), \qquad \hat\alpha_{t-1}(i) = P(q_{t-1} = i \mid O_{1:t-1})$}$$
+
+In each walk-forward iteration, we compute this probability for each factor $k$ and pick the factor with the highest probability as our forecast of the next observation, and simultaneously compute a hit-rate probability. The standard error of the prediction hit rate is computed using a binomial standard error with $p$ = the prediction hit rate.
+
+### Benchmarks
+
+We benchmarked our model's predictions against four naive prediction methods. The first is to guess the factor that has topped most often up to the forecast period. The second is a loaded dice roll on the three factors based on their observed frequencies up to the forecast period; its most likely outcome is the same guess as the first benchmark. The third is a transition matrix counted from the observed top-factor transitions up to the forecast period. The fourth involves guessing the next top factor by assuming that it is the "same as last month." Our benchmarks involve comparing the prediction hit rate on the observations, as well as comparing the BIC scores of our model against naive predictors two and three. We have also run additional diagnostics on the HMM and the raw transition matrix by comparing the average log score, the paired log-score difference and the McNemar test between the HMM and the transition matrix. Details regarding the benchmark construction for each method can be found in Appendix \ref{app-bench}, and the results of the benchmarks will be discussed in the model output section.
+
+### Parametric, Moving Block Bootstraps for A and B and Memoryless Null-test
+
+We want to test the stability of the fitted $A$ and $B$ under different training data and derive a confidence interval over all iterations. \textcolor{blue}{We do so with a parametric and a moving-block bootstrap, each refitting the full estimation procedure on 200 pseudo-sequences, and we test whether the top factors have any memory at all against 200 simulated memoryless sequences. Both procedures are detailed in Appendix \ref{app-m-boot}.}
+
+### Time Homogeneity Test
+
+We want to test the assumption that the hidden Markov chain is time-homogeneous. For this, we employed a sliding window test looking for stability within the fitted parameters, and also tested for known and unknown structural break dates using the likelihood analogue of the Chow test [@chow1960; @andrews1993]. \textcolor{blue}{The sliding-window design, the null hypothesis and the test statistics are detailed in Appendix \ref{app-m-homog}.}
+
+# Results and Interpretation
+
+## Fitted Model
+
+We run the forward-backward (Baum--Welch) algorithm as specified in Problem 3 and obtain the fitted results over 598 training months and 2,606 training weeks as follows:
+
+$$\hat A_{\text{monthly}} = \begin{pmatrix} 0.864 & 0.067 & 0.069 \\ 0.101 & 0.899 & 0.000 \\ 0.092 & 0.052 & 0.857 \end{pmatrix}, \qquad \hat B_{\text{monthly}} = \begin{pmatrix} 0.398 & 0.107 & 0.494 \\ 0.208 & 0.472 & 0.320 \\ 0.000 & 0.330 & 0.670 \end{pmatrix}$$
+
+$$\hat A_{\text{weekly}} = \begin{pmatrix} 0.732 & 0.018 & 0.250 \\ 0.193 & 0.807 & 0.000 \\ 0.326 & 0.046 & 0.628 \end{pmatrix}, \qquad \hat B_{\text{weekly}} = \begin{pmatrix} 0.485 & 0.339 & 0.176 \\ 0.000 & 0.560 & 0.440 \\ 0.037 & 0.159 & 0.804 \end{pmatrix}$$
+
+Rows and columns are ordered SMB, HML, MOM; rows of $\hat A$ are the current state and columns the next state, while rows of $\hat B$ are hidden states and columns the observed top factor.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lcc}
+\toprule
+ & Monthly (598 months) & Weekly (2,606 weeks) \\
+\midrule
+Duration $1/(1-\hat a_{jj})$, SMB & 7.4 months & 3.7 weeks \\
+Duration, HML & 9.9 months & 5.2 weeks \\
+Duration, MOM & 7.0 months & 2.7 weeks \\
+Training log-likelihood & $-620.93$ & $-2{,}761.8$ \\
+Starts keeping the soft names & 95\% & 90\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+**Interpretation:** Overall, we see a high disparity of results between the weekly and monthly models across all fronts. Clues on the persistence of states can be seen across both models when looking at duration (7.0 to 9.9 months versus 2.7 to 5.2 weeks). Noticeably, per period, the training log-likelihood of the monthly model ($-620.93/598 = -1.038$) is higher than that of the weekly model ($-2{,}761.8/2{,}606 = -1.060$), and the monthly model keeps the soft names in a 5-percentage-point larger share of starts (95% versus 90%), indicating that factors as states are more stable across randomized starts when data frequency is lower. On a lift score basis, weekly outperformed monthly by a large margin (1.83 to 1.87 versus 1.44 to 1.63), which can be interpreted as the states being more clearly defined by their factors on a weekly basis.
+
+## Forecasting Performance Against Benchmarks
+
+\begin{table}[H]
+\centering
+\small
+\caption{Walk-forward test results: hit rate (binomial standard error) and average log score; last row compares the HMM with the counted transition matrix.}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccc}
+\toprule
+ & \multicolumn{2}{c}{Monthly (599 test months)} & \multicolumn{2}{c}{Weekly (2,606 test weeks)} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+Predictor & Hit rate & Log score & Hit rate & Log score \\
+\midrule
+HMM, most likely top factor & 42.2\% (2.0) & $-1.089$ & 40.1\% (1.0) & $-1.087$ \\
+Counted transition matrix & 41.9\% (2.0) & $-1.084$ & 39.6\% (1.0) & $-1.090$ \\
+Same as last period & 38.2\% (2.0) & --- & 37.6\% (0.9) & --- \\
+Most frequent factor so far & 41.9\% (2.0) & $-1.086$ & 40.1\% (1.0) & $-1.090$ \\
+\midrule
+HMM $-$ counted matrix: McNemar $p$ / paired log-score difference (s.e.) & $p = 0.90$ & $-0.0058$ (0.0047) & $p = 0.54$ & $+0.0040$ (0.0022) \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+**Interpretation:** It can be seen that our hidden Markov model did not express better predictive capabilities than naive predictors. The pure walk-forward hit rate gain of our hidden Markov model against naive predictors (counted transition matrix, most frequent factor so far) is more consistent with statistical noise (a 0.3-percentage-point gain against a 2.0-percentage-point hit rate standard error on the monthly side, and a 0.5-percentage-point gain against a 1.0-percentage-point standard error on the weekly side). The same can be said for the log score difference of our model against these benchmarks. The McNemar test compares the HMM with the counted transition matrix during periods where their forecasts disagree. This yields $p = 0.90$ monthly and $p = 0.54$ weekly, overall failing to reject equal accuracy between the two models.
+
+\begin{table}[H]
+\centering
+\small
+\caption{In-sample model comparison on the training data: log-likelihood, number of free parameters and BIC (lower is better).}
+\begin{tabular}{lcccc}
+\toprule
+ & \multicolumn{2}{c}{Monthly (598 months)} & \multicolumn{2}{c}{Weekly (2,606 weeks)} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+Model (free parameters) & Log-lik. & BIC & Log-lik. & BIC \\
+\midrule
+No memory (2) & $-633.6$ & \textbf{1,280.0} & $-2{,}806.8$ & 5,629.3 \\
+Counted transition matrix (8) & $-629.1$ & 1,309.4 & $-2{,}769.7$ & \textbf{5,602.3} \\
+HMM (12) & $-620.9$ & 1,318.6 & $-2{,}761.8$ & 5,618.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+**Interpretation:** The in-sample comparison reflects a roughly better result for our model than for the benchmark models on the log-likelihood front ($-620.9$ monthly and $-2{,}761.8$ weekly, the highest in each time frame). However, its BIC scores fall short because there are 12 parameters being estimated within the model, with too little likelihood gain at the end of training to justify such a parameter addition.
+
+## Reliability of the Fitted Parameters
+
+\begin{table}[H]
+\centering
+\small
+\caption{Bootstrap of the monthly fit (200 repetitions per scheme): persistence and name stability. Median and 95\% percentile interval; full results in Appendix \ref{app-full}.}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccccc}
+\toprule
+ & Fitted & \multicolumn{2}{c}{Parametric} & \multicolumn{2}{c}{Moving block (12 months)} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}
+Quantity & value & Median & 95\% interval & Median & 95\% interval \\
+\midrule
+$a_{\text{SMB},\text{SMB}}$ & 0.864 & 0.871 & [0.42, 0.98] & 0.849 & [0.44, 0.98] \\
+$a_{\text{HML},\text{HML}}$ & 0.899 & 0.898 & [0.51, 0.98] & 0.845 & [0.36, 0.98] \\
+$a_{\text{MOM},\text{MOM}}$ & 0.857 & 0.863 & [0.50, 0.97] & 0.840 & [0.33, 0.98] \\
+\midrule
+Refits keeping all three names & --- & \multicolumn{2}{c}{75.0\%} & \multicolumn{2}{c}{56.0\%} \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+**Interpretation:** On the reliability of the fitted parameters, both the parametric and moving block bootstraps show instability within the estimated diagonals. The median diagonals of both methods are relatively close to our fitted values; however, the 95% confidence intervals are spread out, especially within the moving block bootstrap, which implies weak support for the persistence of states, meaning our data cannot confirm our initial hypothesis and the empirical evidence of factor regimes being self-reinforcing. Interestingly, even though the parametric bootstrapping method simulated the data from the fitted model itself, the wide 95% intervals imply the model's inability to precisely retrieve its own estimates, which may point to a structural flaw within our observation encoding that feeds back into the Baum--Welch algorithm. Bootstrapping also shows our pre-named states being relatively fragile, with names kept in 56% of refits within the moving block method and 75% within the parametric method, which may suggest that the names are not as well defined as we initially hypothesized in our model.
+
+\begin{table}[H]
+\centering
+\small
+\caption{No-memory null test, headline statistics: real training sequence against 200 simulated memoryless sequences; full results in Appendix \ref{app-full}.}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccc}
+\toprule
+Statistic & Real & Null median & Null 95th pct. & $p$ \\
+\midrule
+HMM log-likelihood gain over no memory & 12.68 & 3.21 & 7.36 & $<0.01$ \\
+Counted-chain gain over no memory & 4.49 & 1.72 & 3.97 & 0.04 \\
+Largest HMM diagonal & 0.899 & 0.894 & 0.997 & 0.49 \\
+Smallest HMM diagonal & 0.857 & 0.472 & 0.883 & 0.07 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+**Interpretation:**
+
+## Time Homogeneity
+
+\begin{table}[H]
+\centering
+\small
+\caption{Sliding window ($L = 480$ months, 60 windows): diagonals of $A$ fitted on each window's training half.}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccc}
+\toprule
+ & $a_{\text{SMB},\text{SMB}}$ & $a_{\text{HML},\text{HML}}$ & $a_{\text{MOM},\text{MOM}}$ \\
+\midrule
+Main monthly fit (training 1927--1976) & 0.864 & 0.899 & 0.857 \\
+Median, windows starting 1927--1955 (29) & 0.921 & 0.941 & 0.972 \\
+Median, windows starting 1956--1986 (31) & 0.570 & 0.720 & 0.717 \\
+Spearman correlation with window start year & $-0.74$ & $-0.70$ & $-0.65$ \\
+\midrule
+Windows where the names hold & \multicolumn{3}{c}{45 of 60 (75\%)} \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+**Interpretation:** The sliding window test shows that our diagonals experience substantial drifting depending on the window start date, with windows that start before 1956 having median diagonals of roughly 0.92 to 0.97 and windows starting later having median diagonals of around 0.57 to 0.72. We can infer from this diagonal shift that leadership regime or state persistence experiences a weakening effect over time. The Spearman correlation between the diagonals and the window start year supports this, with the correlations of the diagonals being $-0.74$, $-0.70$ and $-0.65$, implying a gradual decline in the diagonals as the start year becomes later.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Break tests. Known date: the train/test split, October 1976. Unknown date: every January 1942--2011. Bootstrap $p$-values simulate from the full-sample fit with no break.}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccc}
+\toprule
+Test & Statistic & $\chi^2$ $p$ & Bootstrap $p$ \\
+\midrule
+Known date, October 1976 (12 df) & LR $= 12.91$ & 0.38 & 0.42 (99 sims) \\
+Observed top-factor chain, October 1976 (6 df) & $\chi^2 = 3.79$ & 0.70 & --- \\
+$B$ shared, $A$ free, October 1976 (6 df) & LR $= 3.84$ & 0.70 & 0.71 (99 sims) \\
+$A$ shared, $B$ free, October 1976 (6 df) & LR $= 6.97$ & 0.32 & 0.28 (99 sims) \\
+Unknown date, sup over 1942--2011 & $\sup$ LR $= 17.71$ (January 1975) & --- & 0.68 (40 sims) \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+**Interpretation:**
+
+## Investment Strategy Overlay
+
+<!-- State-conditional mean returns; rules (HMM expected, HMM top, HMM tilt, chain expected, last winner,
+best so far, equal weight); Sharpe, drawdown, turnover, 10 bp costs, block bootstrap
+(@sharpe1994; @ledoit2008; @demiguel2009; @kunsch1989). -->
+
+\begin{table}[!htp]
+\small
+\caption{Out-of-sample performance by rule (placeholder).}
+\begin{center}
+\begin{tabular}{|l|ccc|}
+\hline
+Rule & Return & Volatility & Sharpe \\
+\hline
+HMM tilt     & ??? & ??? & ??? \\
+Equal weight & ??? & ??? & ??? \\
+\hline
+\end{tabular}
+\label{tab:returns}
+\end{center}
+\end{table}
+
+## Robustness Check {#sec-robust}
+
+<!-- Non-persistent start: data-built A(0) counted from observed transitions (diagonals 0.29-0.51), same B(0); trained A, B and walk-forward results vs assumed A(0) (build log Section 11). Also pi uniform vs training shares (build log Section 12). -->
+
+# Conclusion
+
+<!-- Trained automaton and regime durations, full-sample Viterbi spells, predictive results vs benchmarks,
+return results, interpretation. -->
+
+<!-- Summary of findings; shortcomings (no out-of-sample edge, homogeneity assumption, argmax observation loses
+magnitude information); future improvements. -->
+
+# References
+
+<div id="refs"></div>
+
+\newpage
+\appendix
+
+# Preliminaries {#app-prelim}
+
+## The Carhart Four-Factor Model {#app-carhart}
+
+@carhart1997 posits that the performance of any portfolio can be written in an attribution form of four elementary strategies, or in other words, common risk factors, as follows:
+
+\begin{equation}
+r_{it} = \alpha_{iT} + b_{iT}\,\text{RMRF}_t + s_{iT}\,\text{SMB}_t + h_{iT}\,\text{HML}_t + p_{iT}\,\text{PR1YR}_t + e_{it}, \qquad t = 1, 2, \ldots, T
+\label{eq:carhart}
+\end{equation}
+
+where $r_{it}$ is the excess return of portfolio $i$ in period $t$. The time-series regression equation is the Fama--French three-factor equation [@fama1993] with an added momentum factor. RMRF is a proxy for the equity market risk premium, in a portfolio sense that is investing in high versus low beta stocks; SMB is a proxy for investing in small versus large market capitalization stocks; and HML is a proxy for investing in value versus growth stocks. The new factor Carhart introduced is PR1YR (from here on called MOM), a proxy for investing in the past year's winners versus losers of the market, which is shown to explain a major part of the cross-sectional variation in returns of mutual fund portfolios sorted on one-year past returns. In our data, MOM is Ken French's momentum factor, which is constructed in a similar way [@french_library].
+
+This performance attribution model is built for a single portfolio that is assumed to be small relative to the market. In our paper, we want to measure the market's return attribution to these factors instead, so we reinterpret the model and remove the equity market risk premium, as attributing the market risk premium to the market risk premium itself would not make sense:
+
+\begin{equation}
+r_{it} = \alpha_{iT} + s_{iT}\,\text{SMB}_t + h_{iT}\,\text{HML}_t + p_{iT}\,\text{MOM}_t + e_{it}, \qquad t = 1, 2, \ldots, T
+\label{eq:reduced}
+\end{equation}
+
+In addition, we also choose to exclude RMRF due to the nature of the factor's interpretation. RMRF is a proxy for how well the market performs relative to the risk-free rate, which makes it a directional bet on the market itself, whereas SMB, HML and MOM are zero-cost long-short portfolios on stocks that have these specific characteristics. Our goal for the model is to predict specific factor leadership, for which including the market itself would skew the interpretation towards a bull/bear detector instead.
+
+## Hidden Markov Models {#app-hmm}
+
+A hidden Markov model is, in essence, a variation of the traditional Markov model for cases where the states are not directly observable. Following @rabiner1989, an HMM is characterized as follows:
+
+1. $N$ = the number of states in the model. These states are hidden, and we must specify the number of states at initialization. We denote the individual states as $S = \{S_1, \ldots, S_N\}$ and the state at time $t$ as $q_t$.
+
+2. $M$ = the number of distinct observation symbols per state. In the case of a categorical HMM, these observations are tied to some symbol or index. Let $V = \{v_1, \ldots, v_M\}$ be the set of symbols that a state can emit.
+
+3. $A = \{a_{ij}\}$ = the hidden state transition matrix, which has similar characteristics and interpretation to the transition matrix of a normal Markov chain:
+   $$a_{ij} = P(q_{t+1} = S_j \mid q_t = S_i), \qquad 1 \le i, j \le N,$$
+   where each entry lies between 0 and 1, $0 \le a_{ij} \le 1$, and each row sums to one, $\sum_{j=1}^{N} a_{ij} = 1$.
+
+4. $B = \{b_j(k)\}$ = the emission matrix, which specifies the observation probability distribution in state $j$ at time step $t$:
+   $$b_j(k) = P(O_t = v_k \mid q_t = S_j), \qquad 1 \le j \le N, \quad 1 \le k \le M,$$
+   where $0 \le b_j(k) \le 1$ and each row sums to one, $\sum_{k=1}^{M} b_j(k) = 1$.
+
+5. $\pi = \{\pi_i\}$ = the initial state distribution, where
+   $$\pi_i = P(q_1 = S_i), \qquad 1 \le i \le N, \qquad \sum_{i=1}^{N} \pi_i = 1.$$
+
+6. $O = O_1 O_2 \cdots O_T$ = the observation sequence, in other words, the observable data, where $O_t$ is the observation at time step $t$ and is drawn from $V$, and $T$ is the number of observations.
+
+A complete specification of an HMM requires us to specify $N$ and $M$, the numbers of states and observation symbols, as well as the three probability measures $A$, $B$ and $\pi$. From here on, we denote the parameters of the model as $\lambda = (A, B, \pi)$ [@rabiner1989].
+
+There are three central problems for an HMM [@rabiner1989; @jurafsky_slp3]:
+
+- **Problem 1:** Given the observation sequence $O$ and the model $\lambda = (A, B, \pi)$, we want to find $P(O \mid \lambda)$, the probability of observing this specific observation sequence given the model's parameters. This is solved by the forward algorithm.
+
+- **Problem 2:** Given the observation sequence $O$ and the model $\lambda = (A, B, \pi)$, we want to choose a corresponding state sequence $Q = q_1, \ldots, q_T$ that best explains $O$, in other words, that best explains the data. This is solved by the Viterbi algorithm [@viterbi1967].
+
+- **Problem 3:** We want to adjust the model parameters $\lambda = (A, B, \pi)$ to maximize $P(O \mid \lambda)$. This is solved by the Baum--Welch algorithm [@baum1970], a special case of the expectation--maximization (EM) algorithm [@dempster1977].
+
+## Validation and Benchmark Terminology
+
+<!-- Walk-forward (expanding window) validation (@tashman2000); naive benchmarks: raw MLE transition matrix,
+same as last, most frequent; hit rate and binomial SE; log score (@gneiting2007); McNemar test (@mcnemar1947);
+BIC (@schwarz1978). -->
+
+# Methodology Details {#app-method}
+
+## Dataset Construction and Observation Encoding {#app-m-data}
+
+The library reports the original three factors (RMRF, SMB, HML) separately from the momentum factor, so during dataset construction we must join the two datasets together, keeping only the periods in which all factors are available to retain the time structure of the panel, and drop the RMRF column for the reasons specified in Appendix \ref{app-carhart}.
+
+The monthly dataset is constructed by joining the monthly RMRF/SMB/HML file and the monthly MOM file on a month-by-month basis, and we drop any observations in which any factor is not reported. In practice, the only months dropped are July to December 1926, before the momentum is recorded, leaving 1,197 months from January 1927 to September 2026.
+
+The weekly dataset is published for the three factors (RMRF, SMB, HML), but not for weekly MOM. To account for this, we compute weekly momentum by compounding the daily MOM observations within each of French's weeks, and then inner join the two datasets. Let $w_1 < w_2 < \cdots$ be the weekly dates in the three-factor file (the last trading day of each week), and assign each daily date $d$ to the first weekly date on or after it, $w(d) = \min\{w_i : w_i \ge d\}$. The weekly momentum return is then
+$$\text{MOM}^{\text{week}}_{w} = \prod_{d:\, w(d) = w} \left(1 + \text{MOM}^{\text{day}}_{d}\right) - 1.$$
+As the data's weeks follow actual trading days, most weeks contain five daily observations, but holiday weeks can contain fewer and weeks measured before 1952 can contain six daily observation. The resulting weekly dataset contains 5,212 weeks from November 1926 to September 2026.
+
+As defined above, our HMM takes a discrete (categorical) form, so we must reduce each observation from a three-dimensional vector of factor returns to a discrete label. Each observation at time $t$ is therefore defined by the factor with the highest return, with factor names indexed by $(0, 1, 2)$ as follows:
+$$O_t = \arg\max_{k \in \{\text{SMB},\, \text{HML},\, \text{MOM}\}} f_{k,t}, \qquad 0 = \text{SMB},\ 1 = \text{HML},\ 2 = \text{MOM},$$
+where $f_{k,t}$ is the return of factor $k$ in period $t$. Exact ties are resolved in favour of the first factor in the order SMB, HML, MOM, but they are negligible in our data. The summary statistics for our raw dataset, as well as for the encoded observations, can be found in Appendix \ref{app-summary}.
+
+## Initial Distribution, Starting Matrices and Restarts {#app-m-train}
+
+For the initial distribution $\pi$, we created two versions.
+
+Version 1: we assume the probability of each state at the first time step is uniformly distributed, with the rationale being that since we have no actual information about the distribution, to limit bias we must assume equal probability for seeing any state. $\pi_j = \frac{1}{N} = \frac{1}{3}, \qquad j \in \{\text{SMB}, \text{HML}, \text{MOM}\}$
+
+Version 2: we counted the occurrence of each factor throughout the training dataset, divided by the entire observation count. The rationale behind this is that we are assuming the sample is indicative of the entire distribution. $\pi_j = \hat p_j = \frac{n_j}{T_{\text{train}}}, \qquad n_j = \#\{t \le T_{\text{train}} : O_t = j\}$. This gives monthly: $\hat p = (0.244,\ 0.291,\ 0.465)$ (146, 174 and 278 of 598 training months), weekly: $\hat p = (0.265,\ 0.305,\ 0.430)$ (690, 796 and 1,120 of 2,606 training weeks).
+
+Transition matrix starting values:
+$$a^{(0)}_{ij} = \begin{cases} s, & i = j, \\[4pt] \dfrac{1-s}{N-1}, & i \ne j, \end{cases} \qquad s = 0.8,\ N = 3, \qquad A^{(0)} = \begin{pmatrix} 0.8 & 0.1 & 0.1 \\ 0.1 & 0.8 & 0.1 \\ 0.1 & 0.1 & 0.8 \end{pmatrix}$$
+
+Emission matrix starting values (soft naming):
+$$\scalebox{0.8}{$\displaystyle b^{(0)}_j(k) = \frac{2^{\,\mathbf{1}[k=j]}\,\hat p_k}{1 + \hat p_j}, \quad B^{(0)}_{\text{monthly}} = \begin{pmatrix} 0.392 & 0.234 & 0.374 \\ 0.189 & 0.451 & 0.360 \\ 0.167 & 0.199 & 0.635 \end{pmatrix}, \quad B^{(0)}_{\text{weekly}} = \begin{pmatrix} 0.419 & 0.242 & 0.340 \\ 0.203 & 0.468 & 0.329 \\ 0.185 & 0.214 & 0.601 \end{pmatrix}$}$$
+
+Randomization of the 19 jittered restarts:
+$$\scalebox{0.8}{$\displaystyle X^{(r)} = \text{normalise}\Big(0.8\,X^{(0)} + 0.2\,D^{(r)}\Big), \quad D^{(r)}_{i\cdot} \sim \text{Dirichlet}(1, 1, 1), \quad X \in \{A, B\}, \quad r = 1, \ldots, 19$}$$
+
+## Bootstrap and Null-Test Procedures {#app-m-boot}
+
+**Parametric Bootstrap:** We treat the highest log-likelihood model $(\pi, \hat A, \hat B)$ as the true data-generating process for the top-factor labels. From here, we draw a random $q_1$ from $\pi$, then draw the label $O_t$ from row $q_t$ of $\hat B$, and draw the next state $q_{t+1}$ from row $q_t$ of $\hat A$. We iterate this for 598 months and keep the emitted observations, not the states, as the pseudo-sequence.
+
+**Moving Block Bootstrap:** Given 598 months of training observations, we randomly draw 50 blocks of 12 consecutive training months to account for time dependencies within a year. Each block starts at a random month, and blocks may overlap; we join these blocks together in the order drawn and cut the result to obtain a new 598-month pseudo-sequence.
+
+On each pseudo-sequence, we rerun the model's procedure outlined above, treating the pseudo-sequence as the true data, and align the state labels of each refit to the original fit. Reiterating this process 200 times, we obtain the confidence intervals and the share of iterations that keep the names through the lift check. Results and interpretation will be discussed in the model output section.
+
+**Null-test:** We also want to run a null test of whether the monthly top factors have no memory, where each training month's label is treated as an independent draw with the top-factor training shares, $\hat p = (0.244,\ 0.291,\ 0.465)$. We then simulate 598 independent labels with those shares to create another pseudo-series, repeated 200 times. We fit three models to each new sequence: no memory (shares counted from the pseudo-series), a plain Markov chain (transition matrix constructed from the counts), and a new HMM trained on the series with the same procedure outlined above.
+
+From here, we compare, for the real training sequence against the simulated sequences, the log-likelihood gain of the HMM and the plain Markov chain model over the no-memory model, the HMM diagonals from the largest to the smallest, the implied duration of each state, and the second-largest eigenvalue modulus of each fitted transition matrix.
+
+## Time-Homogeneity Procedures {#app-m-homog}
+
+**Sliding window:** We shrink the estimation window to 480 months, split 50/50 into 240 training and 240 testing months, then move it in 12-month steps, creating 60 positions with window starts from January 1927 to January 1986. In each window, the model is fitted on the training half with the entire estimation procedure as above, and we benchmarked it against a counted transition matrix for walk-forward capabilities on the testing half under both frozen parameters and parameters refitted every month.
+
+**Break test:** We utilized a likelihood analogue of the Chow test to test whether a departure from time homogeneity is statistically significant. The null hypothesis ($H_0$) is that the split models from some break date are only as good as the full model, which implies that the true chain is time-homogeneous; the alternative is that the split models fit significantly better than the full model, which implies that the true chain is time-inhomogeneous. Our test statistic is:
+$$\text{LR}(\tau) = 2\big(\ell_{\text{before}} + \ell_{\text{after}} - \ell_{\text{full}}\big), \qquad \sup_{\tau}\ \text{LR}(\tau) \ \text{ for an unknown break date},$$
+where each $\ell$ is the log-likelihood of the model before, after, and on the full sample.
+
+# Derivation of the Prediction Probability {#app-pred}
+
+The forward variable is the joint probability of the observations so far and the current state given the automaton $\lambda$,
+$$\alpha_{t-1}(i) = P(O_1, \ldots, O_{t-1},\ q_{t-1} = i \mid \lambda),$$
+Conditional probability states: $P(q_{t-1} = i,\ O_{1:t-1} \mid \lambda) = P(q_{t-1} = i \mid O_{1:t-1}, \lambda)\, P(O_{1:t-1} \mid \lambda)$, where $P(O_{1:t-1} \mid \lambda) = \sum_{k=1}^{N} \alpha_{t-1}(k)$. Dividing by this probability gives the scaled forward variable:
+$$\hat\alpha_{t-1}(i) = \frac{\alpha_{t-1}(i)}{\sum_{k=1}^{N} \alpha_{t-1}(k)} = P(q_{t-1} = i \mid O_{1:t-1}).$$
+We move the state probabilities forward with a fitted $A$:
+$$P(q_t = j \mid O_{1:t-1}) = \sum_{i=1}^{N} \hat\alpha_{t-1}(i)\, a_{ij},$$
+As we do not know the next observation, we sum through all possible states using the fitted emission $B$
+$$P(O_t = k \mid O_{1:t-1}) = \sum_{j=1}^{N} P(q_t = j \mid O_{1:t-1})\, b_j(k).$$
+
+# Factor Construction {#app-factor}
+
+<!-- Fama--French SMB and HML (2x3 sorts on size and book-to-market), Carhart PR1YR vs French MOM construction. -->
+
+# Summary Statistics {#app-summary}
+
+Returns are monthly or weekly, in percent. Skew and excess kurtosis are sample estimates; AC(1) is the first-order autocorrelation; $t$ is the mean divided by its standard error. Annualised figures multiply the mean by 12 or 52 and the standard deviation by $\sqrt{12}$ or $\sqrt{52}$. Observation counts are in parentheses.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\textwidth]{docs/cumulative_factor_returns_monthly.pdf}
+\caption{Growth of \$1 in each monthly factor, January 1927 -- September 2026 (log scale). Final values: SMB \$4.2, HML \$31.9, MOM \$357.6. The dashed line marks the train/test split.}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Monthly factor returns (\%), January 1927 -- September 2026.}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llrrrrrrrrrrrr}
+\toprule
+Window & Factor & Mean & SD & Min & Median & Max & Skew & Ex.\ kurt & AC(1) & \% $>0$ & Ann.\ mean & Ann.\ SD & $t$ \\
+\midrule
+Full & SMB & 0.17 & 3.15 & $-17.39$ & 0.07 & 35.96 & 1.78 & 17.8 & 0.05 & 50.8 & 2.02 & 10.92 & 1.85 \\
+(1{,}197) & HML & 0.35 & 3.56 & $-13.83$ & 0.15 & 35.52 & 2.04 & 17.8 & 0.20 & 52.5 & 4.21 & 12.32 & 3.41 \\
+ & MOM & 0.62 & 4.70 & $-52.61$ & 0.80 & 18.05 & $-3.02$ & 27.4 & 0.07 & 62.6 & 7.41 & 16.27 & 4.55 \\
+\midrule
+Train & SMB & 0.21 & 3.35 & $-9.75$ & $-0.06$ & 35.96 & 2.71 & 24.1 & 0.10 & 49.2 & 2.53 & 11.60 & 1.54 \\
+(598) & HML & 0.47 & 3.99 & $-13.19$ & 0.19 & 35.52 & 2.81 & 21.4 & 0.22 & 53.8 & 5.67 & 13.81 & 2.90 \\
+ & MOM & 0.66 & 5.00 & $-52.61$ & 0.90 & 15.78 & $-4.13$ & 37.2 & 0.09 & 63.7 & 7.88 & 17.32 & 3.21 \\
+\midrule
+Test & SMB & 0.13 & 2.95 & $-17.39$ & 0.13 & 21.34 & 0.39 & 6.5 & $-0.02$ & 52.4 & 1.52 & 10.20 & 1.05 \\
+(599) & HML & 0.23 & 3.07 & $-13.83$ & 0.07 & 12.86 & 0.14 & 2.1 & 0.16 & 51.3 & 2.74 & 10.62 & 1.82 \\
+ & MOM & 0.58 & 4.38 & $-34.36$ & 0.76 & 18.05 & $-1.34$ & 9.9 & 0.05 & 61.4 & 6.95 & 15.16 & 3.24 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Weekly factor returns (\%), November 1926 -- September 2026.}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llrrrrrrrrrrrr}
+\toprule
+Window & Factor & Mean & SD & Min & Median & Max & Skew & Ex.\ kurt & AC(1) & \% $>0$ & Ann.\ mean & Ann.\ SD & $t$ \\
+\midrule
+Full & SMB & 0.03 & 1.28 & $-9.70$ & 0.01 & 10.17 & 0.08 & 6.8 & 0.06 & 50.3 & 1.43 & 9.20 & 1.56 \\
+(5{,}212) & HML & 0.08 & 1.51 & $-12.45$ & 0.03 & 15.47 & 0.83 & 11.3 & 0.05 & 51.2 & 4.02 & 10.92 & 3.69 \\
+ & MOM & 0.13 & 1.98 & $-19.71$ & 0.23 & 12.65 & $-1.39$ & 11.3 & 0.07 & 58.0 & 6.83 & 14.27 & 4.79 \\
+\midrule
+Train & SMB & 0.03 & 1.26 & $-9.06$ & $-0.02$ & 10.17 & 0.41 & 10.1 & 0.11 & 48.9 & 1.70 & 9.11 & 1.32 \\
+(2{,}606) & HML & 0.10 & 1.55 & $-12.45$ & 0.03 & 15.47 & 1.22 & 14.9 & 0.07 & 51.2 & 5.11 & 11.17 & 3.24 \\
+ & MOM & 0.13 & 1.91 & $-19.71$ & 0.22 & 8.16 & $-1.70$ & 13.9 & 0.13 & 58.1 & 6.51 & 13.81 & 3.34 \\
+\midrule
+Test & SMB & 0.02 & 1.29 & $-9.70$ & 0.06 & 6.71 & $-0.22$ & 3.9 & 0.01 & 51.6 & 1.17 & 9.29 & 0.89 \\
+(2{,}606) & HML & 0.06 & 1.48 & $-8.79$ & 0.03 & 10.87 & 0.38 & 6.9 & 0.03 & 51.2 & 2.93 & 10.66 & 1.95 \\
+ & MOM & 0.14 & 2.04 & $-15.79$ & 0.24 & 12.65 & $-1.12$ & 9.2 & 0.02 & 58.0 & 7.15 & 14.72 & 3.44 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Correlations between factor returns.}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccc c ccc}
+\toprule
+ & \multicolumn{3}{c}{Monthly} && \multicolumn{3}{c}{Weekly} \\
+\cmidrule{2-4}\cmidrule{6-8}
+Window & SMB--HML & SMB--MOM & HML--MOM && SMB--HML & SMB--MOM & HML--MOM \\
+\midrule
+Full & 0.13 & $-0.16$ & $-0.41$ && $-0.01$ & $-0.05$ & $-0.25$ \\
+Train & 0.33 & $-0.30$ & $-0.54$ && 0.08 & $-0.08$ & $-0.22$ \\
+Test & $-0.17$ & 0.01 & $-0.21$ && $-0.10$ & $-0.02$ & $-0.27$ \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Encoded observations: number and share of periods in which each factor has the highest return.}
+\begin{tabular}{ll rrr c rrr}
+\toprule
+ & & \multicolumn{3}{c}{Count} && \multicolumn{3}{c}{Share} \\
+\cmidrule{3-5}\cmidrule{7-9}
+Dataset & Window & SMB & HML & MOM && SMB & HML & MOM \\
+\midrule
+Monthly & Full & 314 & 354 & 529 && 0.262 & 0.296 & 0.442 \\
+ & Train & 146 & 174 & 278 && 0.244 & 0.291 & 0.465 \\
+ & Test & 168 & 180 & 251 && 0.280 & 0.301 & 0.419 \\
+\midrule
+Weekly & Full & 1{,}461 & 1{,}585 & 2{,}166 && 0.280 & 0.304 & 0.416 \\
+ & Train & 690 & 796 & 1{,}120 && 0.265 & 0.305 & 0.430 \\
+ & Test & 771 & 789 & 1{,}046 && 0.296 & 0.303 & 0.401 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+# Benchmark Construction {#app-bench}
+
+<!-- Formulas for each benchmark: most frequent factor so far; loaded dice (no-memory frequencies, 0.5 pseudo-count); counted transition matrix (0.5 pseudo-count); same as last month. Also average log score, paired log-score difference, McNemar test. -->
+
+# Full Result Tables {#app-full}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Bootstrap of the monthly fit (200 repetitions per scheme): median and 95\% percentile interval.}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccccc}
+\toprule
+ & Fitted & \multicolumn{2}{c}{Parametric} & \multicolumn{2}{c}{Moving block (12 months)} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}
+Quantity & value & Median & 95\% interval & Median & 95\% interval \\
+\midrule
+$a_{\text{SMB},\text{SMB}}$ & 0.864 & 0.871 & [0.42, 0.98] & 0.849 & [0.44, 0.98] \\
+$a_{\text{HML},\text{HML}}$ & 0.899 & 0.898 & [0.51, 0.98] & 0.845 & [0.36, 0.98] \\
+$a_{\text{MOM},\text{MOM}}$ & 0.857 & 0.863 & [0.50, 0.97] & 0.840 & [0.33, 0.98] \\
+\midrule
+Expected duration, SMB (months) & 7.4 & 7.8 & [1.7, 46.7] & 6.6 & [1.8, 40.4] \\
+Expected duration, HML (months) & 9.9 & 9.8 & [2.0, 46.9] & 6.5 & [1.6, 47.5] \\
+Expected duration, MOM (months) & 7.0 & 7.3 & [2.0, 34.4] & 6.3 & [1.5, 43.1] \\
+\midrule
+$b_{\text{SMB}}(\text{SMB})$ & 0.398 & 0.419 & [0.28, 0.94] & 0.386 & [0.00, 0.78] \\
+$b_{\text{HML}}(\text{HML})$ & 0.472 & 0.487 & [0.32, 0.82] & 0.488 & [0.25, 0.98] \\
+$b_{\text{MOM}}(\text{MOM})$ & 0.670 & 0.676 & [0.44, 0.96] & 0.606 & [0.35, 1.00] \\
+\midrule
+Own-factor lift, SMB & 1.63 & 1.68 & [1.21, 3.62] & 1.59 & [0.00, 3.12] \\
+Own-factor lift, HML & 1.62 & 1.67 & [1.12, 2.89] & 1.72 & [0.86, 3.31] \\
+Own-factor lift, MOM & 1.44 & 1.45 & [0.96, 2.10] & 1.29 & [0.76, 2.28] \\
+\midrule
+Refits keeping all three names & --- & \multicolumn{2}{c}{75.0\%} & \multicolumn{2}{c}{56.0\%} \\
+Refits needing no relabelling & --- & \multicolumn{2}{c}{84.5\%} & \multicolumn{2}{c}{69.0\%} \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\caption{No-memory null test: real training sequence against 200 simulated memoryless sequences. $p$ is the share of simulated sequences with a value at least as large as the real one.}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccccc}
+\toprule
+Statistic & Real & Null median & Null 95th pct. & \# null $\ge$ real & $p$ \\
+\midrule
+HMM log-likelihood gain over no memory & 12.68 & 3.21 & 7.36 & 0 & $<0.01$ \\
+Counted-chain gain over no memory & 4.49 & 1.72 & 3.97 & 7 & 0.04 \\
+Second-largest eigenvalue modulus, counted chain & 0.117 & 0.049 & 0.097 & 3 & 0.02 \\
+Second-largest eigenvalue modulus, HMM & 0.849 & 0.609 & 0.957 & 57 & 0.29 \\
+Largest HMM diagonal & 0.899 & 0.894 & 0.997 & 97 & 0.49 \\
+Smallest HMM diagonal & 0.857 & 0.472 & 0.883 & 13 & 0.07 \\
+Duration of the stickiest state (months) & 9.9 & 9.4 & 306 & 97 & 0.49 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Sliding window: walk-forward results on each window's testing half (60 windows).}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcc}
+\toprule
+ & Frozen & Refit monthly \\
+\midrule
+Mean hit rate, HMM & 42.1\% & 42.6\% \\
+Mean hit rate, counted transition matrix & 43.7\% & 43.7\% \\
+Windows where the HMM's hit rate is below the counted matrix's & 67\% & 73\% \\
+Mean log-score difference, HMM $-$ counted matrix & $-0.020$ & $-0.015$ \\
+Windows where that difference is negative & 85\% & 88\% \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
